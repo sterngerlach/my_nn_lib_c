@@ -19,12 +19,9 @@
 
 typedef struct
 {
-  FloatTensor* linear0_weight_;
-  FloatTensor* linear0_bias_;
-  FloatTensor* linear1_weight_;
-  FloatTensor* linear1_bias_;
-  FloatTensor* linear2_weight_;
-  FloatTensor* linear2_bias_;
+  LinearParams linear0_;
+  LinearParams linear1_;
+  LinearParams linear2_;
 } ModelParams;
 
 typedef struct
@@ -40,35 +37,23 @@ typedef struct
 
 void ModelParamsInitialize(ModelParams* params)
 {
-  params->linear0_weight_ = (FloatTensor*)TensorEmpty2d(
-    TENSOR_TYPE_FLOAT, 256, 784);
-  params->linear0_bias_ = (FloatTensor*)TensorEmpty1d(
-    TENSOR_TYPE_FLOAT, 256);
-  params->linear1_weight_ = (FloatTensor*)TensorEmpty2d(
-    TENSOR_TYPE_FLOAT, 64, 256);
-  params->linear1_bias_ = (FloatTensor*)TensorEmpty1d(
-    TENSOR_TYPE_FLOAT, 64);
-  params->linear2_weight_ = (FloatTensor*)TensorEmpty2d(
-    TENSOR_TYPE_FLOAT, 10, 64);
-  params->linear2_bias_ = (FloatTensor*)TensorEmpty1d(
-    TENSOR_TYPE_FLOAT, 10);
+  LinearParamsInitialize(&params->linear0_, 784, 512);
+  LinearParamsInitialize(&params->linear1_, 512, 128);
+  LinearParamsInitialize(&params->linear2_, 128, 10);
 
-  FloatTensorRandomUniform(params->linear0_weight_, -0.1f, 0.1f);
-  FloatTensorRandomUniform(params->linear0_bias_, -0.1f, 0.1f);
-  FloatTensorRandomUniform(params->linear1_weight_, -0.1f, 0.1f);
-  FloatTensorRandomUniform(params->linear1_bias_, -0.1f, 0.1f);
-  FloatTensorRandomUniform(params->linear2_weight_, -0.1f, 0.1f);
-  FloatTensorRandomUniform(params->linear2_bias_, -0.1f, 0.1f);
+  FloatTensorRandomUniform(params->linear0_.weight_, -0.1f, 0.1f);
+  FloatTensorRandomUniform(params->linear0_.bias_, -0.1f, 0.1f);
+  FloatTensorRandomUniform(params->linear1_.weight_, -0.1f, 0.1f);
+  FloatTensorRandomUniform(params->linear1_.bias_, -0.1f, 0.1f);
+  FloatTensorRandomUniform(params->linear2_.weight_, -0.1f, 0.1f);
+  FloatTensorRandomUniform(params->linear2_.bias_, -0.1f, 0.1f);
 }
 
 void ModelParamsDestroy(ModelParams* params)
 {
-  TensorFree((Tensor**)&params->linear0_weight_);
-  TensorFree((Tensor**)&params->linear0_bias_);
-  TensorFree((Tensor**)&params->linear1_weight_);
-  TensorFree((Tensor**)&params->linear1_bias_);
-  TensorFree((Tensor**)&params->linear2_weight_);
-  TensorFree((Tensor**)&params->linear2_bias_);
+  LinearParamsFree(&params->linear0_);
+  LinearParamsFree(&params->linear1_);
+  LinearParamsFree(&params->linear2_);
 }
 
 void LayerOutputsInitialize(LayerOutputs* outputs)
@@ -102,30 +87,30 @@ void OptimizerInitialize(TensorListEntry* optim_params,
   TensorListInitialize(optim_gradients);
 
   TensorListAppend(optim_params,
-    (Tensor*)params->linear0_weight_, "linear0_weight");
+    (Tensor*)params->linear0_.weight_, "linear0_weight");
   TensorListAppend(optim_params,
-    (Tensor*)params->linear0_bias_, "linear0_bias");
+    (Tensor*)params->linear0_.bias_, "linear0_bias");
   TensorListAppend(optim_params,
-    (Tensor*)params->linear1_weight_, "linear1_weight");
+    (Tensor*)params->linear1_.weight_, "linear1_weight");
   TensorListAppend(optim_params,
-    (Tensor*)params->linear1_bias_, "linear1_bias");
+    (Tensor*)params->linear1_.bias_, "linear1_bias");
   TensorListAppend(optim_params,
-    (Tensor*)params->linear2_weight_, "linear2_weight");
+    (Tensor*)params->linear2_.weight_, "linear2_weight");
   TensorListAppend(optim_params,
-    (Tensor*)params->linear2_bias_, "linear2_bias");
+    (Tensor*)params->linear2_.bias_, "linear2_bias");
 
   TensorListAppend(optim_gradients,
-    (Tensor*)gradients->linear0_weight_, "linear0_weight");
+    (Tensor*)gradients->linear0_.weight_, "linear0_weight");
   TensorListAppend(optim_gradients,
-    (Tensor*)gradients->linear0_bias_, "linear0_bias");
+    (Tensor*)gradients->linear0_.bias_, "linear0_bias");
   TensorListAppend(optim_gradients,
-    (Tensor*)gradients->linear1_weight_, "linear1_weight");
+    (Tensor*)gradients->linear1_.weight_, "linear1_weight");
   TensorListAppend(optim_gradients,
-    (Tensor*)gradients->linear1_bias_, "linear1_bias");
+    (Tensor*)gradients->linear1_.bias_, "linear1_bias");
   TensorListAppend(optim_gradients,
-    (Tensor*)gradients->linear2_weight_, "linear2_weight");
+    (Tensor*)gradients->linear2_.weight_, "linear2_weight");
   TensorListAppend(optim_gradients,
-    (Tensor*)gradients->linear2_bias_, "linear2_bias");
+    (Tensor*)gradients->linear2_.bias_, "linear2_bias");
 }
 
 void OptimizerDestroy(TensorListEntry* optim_params,
@@ -142,18 +127,15 @@ float ModelForward(const FloatTensor* x,
 {
   // `x` is of size (B, 784)
   // `x0_` and `x1_` are of size (B, 256)
-  LinearForward(x, outputs->x0_,
-                params->linear0_weight_, params->linear0_bias_);
+  LinearForward(x, outputs->x0_, &params->linear0_);
   ReLUForward(outputs->x0_, outputs->x1_);
 
   // `x2_` and `x3_` are of size (B, 64)
-  LinearForward(outputs->x1_, outputs->x2_,
-                params->linear1_weight_, params->linear1_bias_);
+  LinearForward(outputs->x1_, outputs->x2_, &params->linear1_);
   ReLUForward(outputs->x2_, outputs->x3_);
 
   // `x4_` and `x5_` are of size (B, 10)
-  LinearForward(outputs->x3_, outputs->x4_,
-                params->linear2_weight_, params->linear2_bias_);
+  LinearForward(outputs->x3_, outputs->x4_, &params->linear2_);
   ReLUForward(outputs->x4_, outputs->x5_);
 
   // `x6_` is of size (B, 10)
@@ -177,24 +159,21 @@ void ModelBackward(const ModelParams* params,
 
   // `x3_` is of size (B, 64)
   LinearBackward(grad_outputs->x4_, outputs->x3_, grad_outputs->x3_,
-                 grad_params->linear2_weight_, grad_params->linear2_bias_,
-                 params->linear2_weight_, params->linear2_bias_);
+                 &grad_params->linear2_, &params->linear2_);
 
   // `x2_` is of size (B, 64)
   ReLUBackward(grad_outputs->x3_, outputs->x2_, grad_outputs->x2_);
 
   // `x1_` is of size (B, 256)
   LinearBackward(grad_outputs->x2_, outputs->x1_, grad_outputs->x1_,
-                 grad_params->linear1_weight_, grad_params->linear1_bias_,
-                 params->linear1_weight_, params->linear1_bias_);
+                 &grad_params->linear1_, &params->linear1_);
 
   // `x0_` is of size (B, 256)
   ReLUBackward(grad_outputs->x1_, outputs->x0_, grad_outputs->x0_);
 
   // `x` is of size (B, 784)
   LinearBackward(grad_outputs->x0_, x, dx,
-                 grad_params->linear0_weight_, grad_params->linear0_bias_,
-                 params->linear0_weight_, params->linear0_bias_);
+                 &grad_params->linear0_, &params->linear0_);
 }
 
 void ModelUpdateParams(Optimizer* optimizer,

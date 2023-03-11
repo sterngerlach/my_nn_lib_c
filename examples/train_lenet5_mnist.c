@@ -22,28 +22,13 @@
 
 typedef struct
 {
-  FloatTensor* conv0_weight_;
-  FloatTensor* conv0_bias_;
-  int          conv0_stride_;
-  int          conv0_padding_;
-  int          pool0_kernel_size_;
-  int          pool0_stride_;
-  int          pool0_padding_;
-
-  FloatTensor* conv1_weight_;
-  FloatTensor* conv1_bias_;
-  int          conv1_stride_;
-  int          conv1_padding_;
-  int          pool1_kernel_size_;
-  int          pool1_stride_;
-  int          pool1_padding_;
-
-  FloatTensor* linear0_weight_;
-  FloatTensor* linear0_bias_;
-  FloatTensor* linear1_weight_;
-  FloatTensor* linear1_bias_;
-  FloatTensor* linear2_weight_;
-  FloatTensor* linear2_bias_;
+  Conv2dParams    conv0_;
+  MaxPool2dParams pool0_;
+  Conv2dParams    conv1_;
+  MaxPool2dParams pool1_;
+  LinearParams    linear0_;
+  LinearParams    linear1_;
+  LinearParams    linear2_;
 } LeNet5Params;
 
 typedef struct
@@ -68,65 +53,39 @@ typedef struct
 
 void LeNet5ParamsInitialize(LeNet5Params* params)
 {
-  params->conv0_weight_ = (FloatTensor*)TensorEmpty4d(
-    TENSOR_TYPE_FLOAT, 6, 1, 5, 5);
-  params->conv0_bias_ = (FloatTensor*)TensorEmpty1d(
-    TENSOR_TYPE_FLOAT, 6);
-  params->conv0_stride_ = 1;
-  params->conv0_padding_ = 2;
-  params->pool0_kernel_size_ = 2;
-  params->pool0_stride_ = 2;
-  params->pool0_padding_ = 0;
+  Conv2dParamsInitialize(&params->conv0_, 1, 6, 5, 5, 1, 2);
+  MaxPool2dParamsInitialize(&params->pool0_, 2, 2, 2, 0);
 
-  params->conv1_weight_ = (FloatTensor*)TensorEmpty4d(
-    TENSOR_TYPE_FLOAT, 16, 6, 5, 5);
-  params->conv1_bias_ = (FloatTensor*)TensorEmpty1d(
-    TENSOR_TYPE_FLOAT, 16);
-  params->conv1_stride_ = 1;
-  params->conv1_padding_ = 0;
-  params->pool1_kernel_size_ = 2;
-  params->pool1_stride_ = 2;
-  params->pool1_padding_ = 0;
+  Conv2dParamsInitialize(&params->conv1_, 6, 16, 5, 5, 1, 0);
+  MaxPool2dParamsInitialize(&params->pool1_, 2, 2, 2, 0);
 
-  params->linear0_weight_ = (FloatTensor*)TensorEmpty2d(
-    TENSOR_TYPE_FLOAT, 120, 400);
-  params->linear0_bias_ = (FloatTensor*)TensorEmpty1d(
-    TENSOR_TYPE_FLOAT, 120);
+  LinearParamsInitialize(&params->linear0_, 400, 120);
+  LinearParamsInitialize(&params->linear1_, 120, 84);
+  LinearParamsInitialize(&params->linear2_, 84, 10);
 
-  params->linear1_weight_ = (FloatTensor*)TensorEmpty2d(
-    TENSOR_TYPE_FLOAT, 84, 120);
-  params->linear1_bias_ = (FloatTensor*)TensorEmpty1d(
-    TENSOR_TYPE_FLOAT, 84);
-
-  params->linear2_weight_ = (FloatTensor*)TensorEmpty2d(
-    TENSOR_TYPE_FLOAT, 10, 84);
-  params->linear2_bias_ = (FloatTensor*)TensorEmpty1d(
-    TENSOR_TYPE_FLOAT, 10);
-
-  FloatTensorRandomUniform(params->conv0_weight_, -0.1f, 0.1f);
-  FloatTensorRandomUniform(params->conv0_bias_, -0.1f, 0.1f);
-  FloatTensorRandomUniform(params->conv1_weight_, -0.1f, 0.1f);
-  FloatTensorRandomUniform(params->conv1_bias_, -0.1f, 0.1f);
-  FloatTensorRandomUniform(params->linear0_weight_, -0.1f, 0.1f);
-  FloatTensorRandomUniform(params->linear0_bias_, -0.1f, 0.1f);
-  FloatTensorRandomUniform(params->linear1_weight_, -0.1f, 0.1f);
-  FloatTensorRandomUniform(params->linear1_bias_, -0.1f, 0.1f);
-  FloatTensorRandomUniform(params->linear2_weight_, -0.1f, 0.1f);
-  FloatTensorRandomUniform(params->linear2_bias_, -0.1f, 0.1f);
+  FloatTensorRandomUniform(params->conv0_.weight_, -0.1f, 0.1f);
+  FloatTensorRandomUniform(params->conv0_.bias_, -0.1f, 0.1f);
+  FloatTensorRandomUniform(params->conv1_.weight_, -0.1f, 0.1f);
+  FloatTensorRandomUniform(params->conv1_.bias_, -0.1f, 0.1f);
+  FloatTensorRandomUniform(params->linear0_.weight_, -0.1f, 0.1f);
+  FloatTensorRandomUniform(params->linear0_.bias_, -0.1f, 0.1f);
+  FloatTensorRandomUniform(params->linear1_.weight_, -0.1f, 0.1f);
+  FloatTensorRandomUniform(params->linear1_.bias_, -0.1f, 0.1f);
+  FloatTensorRandomUniform(params->linear2_.weight_, -0.1f, 0.1f);
+  FloatTensorRandomUniform(params->linear2_.bias_, -0.1f, 0.1f);
 }
 
 void LeNet5ParamsDestroy(LeNet5Params* params)
 {
-  TensorFree((Tensor**)&params->conv0_weight_);
-  TensorFree((Tensor**)&params->conv0_bias_);
-  TensorFree((Tensor**)&params->conv1_weight_);
-  TensorFree((Tensor**)&params->conv1_bias_);
-  TensorFree((Tensor**)&params->linear0_weight_);
-  TensorFree((Tensor**)&params->linear0_bias_);
-  TensorFree((Tensor**)&params->linear1_weight_);
-  TensorFree((Tensor**)&params->linear1_bias_);
-  TensorFree((Tensor**)&params->linear2_weight_);
-  TensorFree((Tensor**)&params->linear2_bias_);
+  Conv2dParamsFree(&params->conv0_);
+  MaxPool2dParamsFree(&params->pool0_);
+
+  Conv2dParamsFree(&params->conv1_);
+  MaxPool2dParamsFree(&params->pool1_);
+
+  LinearParamsFree(&params->linear0_);
+  LinearParamsFree(&params->linear1_);
+  LinearParamsFree(&params->linear2_);
 }
 
 void LayerOutputsInitialize(LayerOutputs* outputs)
@@ -180,46 +139,46 @@ void OptimizerInitialize(TensorListEntry* optim_params,
   TensorListInitialize(optim_gradients);
 
   TensorListAppend(optim_params,
-    (Tensor*)params->conv0_weight_, "conv0_weight");
+    (Tensor*)params->conv0_.weight_, "conv0_weight");
   TensorListAppend(optim_params,
-    (Tensor*)params->conv0_bias_, "conv0_bias");
+    (Tensor*)params->conv0_.bias_, "conv0_bias");
   TensorListAppend(optim_params,
-    (Tensor*)params->conv1_weight_, "conv1_weight");
+    (Tensor*)params->conv1_.weight_, "conv1_weight");
   TensorListAppend(optim_params,
-    (Tensor*)params->conv1_bias_, "conv1_bias");
+    (Tensor*)params->conv1_.bias_, "conv1_bias");
   TensorListAppend(optim_params,
-    (Tensor*)params->linear0_weight_, "linear0_weight");
+    (Tensor*)params->linear0_.weight_, "linear0_weight");
   TensorListAppend(optim_params,
-    (Tensor*)params->linear0_bias_, "linear0_bias");
+    (Tensor*)params->linear0_.bias_, "linear0_bias");
   TensorListAppend(optim_params,
-    (Tensor*)params->linear1_weight_, "linear1_weight");
+    (Tensor*)params->linear1_.weight_, "linear1_weight");
   TensorListAppend(optim_params,
-    (Tensor*)params->linear1_bias_, "linear1_bias");
+    (Tensor*)params->linear1_.bias_, "linear1_bias");
   TensorListAppend(optim_params,
-    (Tensor*)params->linear2_weight_, "linear2_weight");
+    (Tensor*)params->linear2_.weight_, "linear2_weight");
   TensorListAppend(optim_params,
-    (Tensor*)params->linear2_bias_, "linear2_bias");
+    (Tensor*)params->linear2_.bias_, "linear2_bias");
 
   TensorListAppend(optim_gradients,
-    (Tensor*)gradients->conv0_weight_, "conv0_weight");
+    (Tensor*)gradients->conv0_.weight_, "conv0_weight");
   TensorListAppend(optim_gradients,
-    (Tensor*)gradients->conv0_bias_, "conv0_bias");
+    (Tensor*)gradients->conv0_.bias_, "conv0_bias");
   TensorListAppend(optim_gradients,
-    (Tensor*)gradients->conv1_weight_, "conv1_weight");
+    (Tensor*)gradients->conv1_.weight_, "conv1_weight");
   TensorListAppend(optim_gradients,
-    (Tensor*)gradients->conv1_bias_, "conv1_bias");
+    (Tensor*)gradients->conv1_.bias_, "conv1_bias");
   TensorListAppend(optim_gradients,
-    (Tensor*)gradients->linear0_weight_, "linear0_weight");
+    (Tensor*)gradients->linear0_.weight_, "linear0_weight");
   TensorListAppend(optim_gradients,
-    (Tensor*)gradients->linear0_bias_, "linear0_bias");
+    (Tensor*)gradients->linear0_.bias_, "linear0_bias");
   TensorListAppend(optim_gradients,
-    (Tensor*)gradients->linear1_weight_, "linear1_weight");
+    (Tensor*)gradients->linear1_.weight_, "linear1_weight");
   TensorListAppend(optim_gradients,
-    (Tensor*)gradients->linear1_bias_, "linear1_bias");
+    (Tensor*)gradients->linear1_.bias_, "linear1_bias");
   TensorListAppend(optim_gradients,
-    (Tensor*)gradients->linear2_weight_, "linear2_weight");
+    (Tensor*)gradients->linear2_.weight_, "linear2_weight");
   TensorListAppend(optim_gradients,
-    (Tensor*)gradients->linear2_bias_, "linear2_bias");
+    (Tensor*)gradients->linear2_.bias_, "linear2_bias");
 }
 
 void OptimizerDestroy(TensorListEntry* optim_params,
@@ -236,43 +195,34 @@ float LeNet5Forward(const FloatTensor* x,
 {
   // `x` is of size (B, 1, 28, 28)
   // `x0_` and `x1_` are of size (B, 6, 28, 28)
-  Conv2dForward(x, outputs->x0_,
-                params->conv0_weight_, params->conv0_bias_,
-                params->conv0_stride_, params->conv0_padding_);
+  Conv2dForward(x, outputs->x0_, &params->conv0_);
   ReLUForward(outputs->x0_, outputs->x1_);
 
   // `x2_` is of size (B, 6, 14, 14)
   MaxPool2dForward(outputs->x1_, outputs->x2_, outputs->mask0_,
-                   params->pool0_kernel_size_, params->pool0_kernel_size_,
-                   params->pool0_stride_, params->pool0_padding_);
+                   &params->pool0_);
 
   // `x3_` and `x4_` are of size (B, 16, 10, 10)
-  Conv2dForward(outputs->x2_, outputs->x3_,
-                params->conv1_weight_, params->conv1_bias_,
-                params->conv1_stride_, params->conv1_padding_);
+  Conv2dForward(outputs->x2_, outputs->x3_, &params->conv1_);
   ReLUForward(outputs->x3_, outputs->x4_);
 
   // `x5_` is of size (B, 16, 5, 5)
   MaxPool2dForward(outputs->x4_, outputs->x5_, outputs->mask1_,
-                   params->pool1_kernel_size_, params->pool1_kernel_size_,
-                   params->pool1_stride_, params->pool1_padding_);
+                   &params->pool1_);
 
   // `x6_` is of size (B, 400)
   FlattenForward(outputs->x5_, outputs->x6_);
 
   // `x7_` and `x8_` are of size (B, 120)
-  LinearForward(outputs->x6_, outputs->x7_,
-                params->linear0_weight_, params->linear0_bias_);
+  LinearForward(outputs->x6_, outputs->x7_, &params->linear0_);
   ReLUForward(outputs->x7_, outputs->x8_);
 
   // `x9_` and `x10_` are of size (B, 84)
-  LinearForward(outputs->x8_, outputs->x9_,
-                params->linear1_weight_, params->linear1_bias_);
+  LinearForward(outputs->x8_, outputs->x9_, &params->linear1_);
   ReLUForward(outputs->x9_, outputs->x10_);
 
   // `x11_` and `x12_` are of size (B, 10)
-  LinearForward(outputs->x10_, outputs->x11_,
-                params->linear2_weight_, params->linear2_bias_);
+  LinearForward(outputs->x10_, outputs->x11_, &params->linear2_);
   ReLUForward(outputs->x11_, outputs->x12_);
 
   // `x13_` is of size (B, 10)
@@ -295,53 +245,42 @@ void LeNet5Backward(const LeNet5Params* params,
   ReLUBackward(grad_outputs->x12_, outputs->x11_, grad_outputs->x11_);
   // `x10_` is of size (B, 84)
   LinearBackward(grad_outputs->x11_, outputs->x10_, grad_outputs->x10_,
-                 grad_params->linear2_weight_, grad_params->linear2_bias_,
-                 params->linear2_weight_, params->linear2_bias_);
+                 &grad_params->linear2_, &params->linear2_);
 
   // `x9_` is of size (B, 84)
   ReLUBackward(grad_outputs->x10_, outputs->x9_, grad_outputs->x9_);
   // `x8_` is of size (B, 120)
   LinearBackward(grad_outputs->x9_, outputs->x8_, grad_outputs->x8_,
-                 grad_params->linear1_weight_, grad_params->linear1_bias_,
-                 params->linear1_weight_, params->linear1_bias_);
+                 &grad_params->linear1_, &params->linear1_);
 
   // `x7_` is of size (B, 120)
   ReLUBackward(grad_outputs->x8_, outputs->x7_, grad_outputs->x7_);
   // `x6_` is of size (B, 400)
   LinearBackward(grad_outputs->x7_, outputs->x6_, grad_outputs->x6_,
-                 grad_params->linear0_weight_, grad_params->linear0_bias_,
-                 params->linear0_weight_, params->linear0_bias_);
+                 &grad_params->linear0_, &params->linear0_);
 
   // `x5_` is of size (B, 16, 5, 5)
   FlattenBackward(grad_outputs->x6_, outputs->x5_, grad_outputs->x5_);
 
   // `x4_` is of size (B, 16, 10, 10)
   MaxPool2dBackward(grad_outputs->x5_, outputs->mask1_,
-                    outputs->x4_, grad_outputs->x4_,
-                    params->pool1_kernel_size_, params->pool1_kernel_size_,
-                    params->pool1_stride_, params->pool1_padding_);
+                    outputs->x4_, grad_outputs->x4_, &params->pool1_);
 
   // `x3_` is of size (B, 16, 10, 10)
   ReLUBackward(grad_outputs->x4_, outputs->x3_, grad_outputs->x3_);
   // `x2_` is of size (B, 6, 14, 14)
   Conv2dBackward(grad_outputs->x3_, outputs->x2_, grad_outputs->x2_,
-                 grad_params->conv1_weight_, grad_params->conv1_bias_,
-                 params->conv1_weight_, params->conv1_bias_,
-                 params->conv1_stride_, params->conv1_padding_);
+                 &grad_params->conv1_, &params->conv1_);
 
   // `x1_` is of size (B, 6, 28, 28)
   MaxPool2dBackward(grad_outputs->x2_, outputs->mask0_,
-                    outputs->x1_, grad_outputs->x1_,
-                    params->pool0_kernel_size_, params->pool0_kernel_size_,
-                    params->pool0_stride_, params->pool0_padding_);
+                    outputs->x1_, grad_outputs->x1_, &params->pool0_);
 
   // `x0_` is of size (B, 6, 28, 28)
   ReLUBackward(grad_outputs->x1_, outputs->x0_, grad_outputs->x0_);
   // `x` is of size (B, 1, 28, 28)
   Conv2dBackward(grad_outputs->x0_, x, dx,
-                 grad_params->conv0_weight_, grad_params->conv0_bias_,
-                 params->conv0_weight_, params->conv0_bias_,
-                 params->conv0_stride_, params->conv0_padding_);
+                 &grad_params->conv0_, &params->conv0_);
 }
 
 void LeNet5UpdateParams(Optimizer* optimizer,
