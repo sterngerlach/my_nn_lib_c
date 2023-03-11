@@ -22,7 +22,13 @@ static void MaxPool2dForwardBackward(const int batch_size,
   FloatTensor* y = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
   Index2dTensor* mask = (Index2dTensor*)TensorAllocate(TENSOR_TYPE_INDEX2D);
 
-  MaxPool2dForward(x, y, mask, kernel_size, kernel_size, stride, padding);
+  MaxPool2dParams params;
+  params.kernel_height_ = kernel_size;
+  params.kernel_width_ = kernel_size;
+  params.stride_ = stride;
+  params.padding_ = padding;
+
+  MaxPool2dForward(x, y, mask, &params);
 
   EXPECT_TRUE(TensorIsShapeEqualNd((Tensor*)y, 4,
     batch_size, channels, out_height, out_width));
@@ -34,7 +40,7 @@ static void MaxPool2dForwardBackward(const int batch_size,
     TENSOR_TYPE_FLOAT, batch_size, channels, out_height, out_width);
   FloatTensor* dx = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
 
-  MaxPool2dBackward(dy, mask, x, dx, kernel_size, kernel_size, stride, padding);
+  MaxPool2dBackward(dy, mask, x, dx, &params);
 
   EXPECT_TRUE(TensorIsShapeEqualNd((Tensor*)dx, 4,
     batch_size, channels, in_height, in_width));

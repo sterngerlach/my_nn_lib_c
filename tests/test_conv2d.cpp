@@ -25,8 +25,14 @@ static void Conv2dForwardAndBackward(const int batch_size,
   FloatTensor* bias = (FloatTensor*)TensorEmpty1d(
     TENSOR_TYPE_FLOAT, out_channels);
 
+  Conv2dParams params;
+  params.weight_ = weight;
+  params.bias_ = bias;
+  params.stride_ = stride;
+  params.padding_ = padding;
+
   FloatTensor* y = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
-  Conv2dForward(x, y, weight, bias, stride, padding);
+  Conv2dForward(x, y, &params);
 
   EXPECT_EQ(y->base_.ndim_, 4);
   EXPECT_EQ(y->base_.shape_[0], batch_size);
@@ -41,7 +47,12 @@ static void Conv2dForwardAndBackward(const int batch_size,
   FloatTensor* dx = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
   FloatTensor* dweight = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
   FloatTensor* dbias = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
-  Conv2dBackward(dy, x, dx, dweight, dbias, weight, bias, stride, padding);
+
+  Conv2dParams dparams;
+  dparams.weight_ = dweight;
+  dparams.bias_ = dbias;
+
+  Conv2dBackward(dy, x, dx, &dparams, &params);
 
   EXPECT_TRUE(TensorIsShapeEqual((Tensor*)x, (Tensor*)dx));
   EXPECT_TRUE(TensorIsShapeEqual((Tensor*)weight, (Tensor*)dweight));
