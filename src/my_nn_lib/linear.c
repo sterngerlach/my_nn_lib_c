@@ -6,43 +6,67 @@
 #include "my_nn_lib/tensor_util.h"
 #include "my_nn_lib/util.h"
 
+// Initialize the parameters for the fully-connected layer
+void LinearParamsInitialize(LinearParams* params,
+                            const int in_dims,
+                            const int out_dims)
+{
+  Assert(params != NULL, "`params` should not be NULL");
+  Assert(in_dims > 0, "`in_dims` should be greater than 0");
+  Assert(out_dims > 0, "`out_dims` should be greater than 0");
+
+  params->weight_ = (FloatTensor*)TensorEmpty2d(
+    TENSOR_TYPE_FLOAT, out_dims, in_dims);
+  params->bias_ = (FloatTensor*)TensorEmpty1d(
+    TENSOR_TYPE_FLOAT, out_dims);
+}
+
+// Free the parameters for the fully-connected layer
+void LinearParamsFree(LinearParams* params)
+{
+  Assert(params != NULL, "`params` should not be NULL");
+
+  TensorFree((Tensor**)&params->weight_);
+  TensorFree((Tensor**)&params->bias_);
+}
+
 // Forward operation for the fully-connected layer
 // `x` should be of size (B, Din)
 // The returned tensor `y` is of size (B, Dout)
-// `weight` should be of size (Dout, Din)
-// `bias` should be of size (Dout)
-// `bias` may be `NULL`
+// `params->weight_` should be of size (Dout, Din)
+// `params->bias_` should be of size (Dout)
+// `params->bias_` may be `NULL`
 void LinearForward(const FloatTensor* x,
                    FloatTensor* y,
-                   const FloatTensor* weight,
-                   const FloatTensor* bias)
+                   const LinearParams* params)
 {
   // The input and output tensors should not be NULL except `bias`
   CheckTensor(x);
   CheckTensor(y);
-  CheckTensor(weight);
+  CheckTensor(params->weight_);
 
   // Check the dimensions of the input tensors
   CheckTensorDims(x, 2);
-  CheckTensorDims(weight, 2);
-  CheckTensorDims(bias, 1);
+  CheckTensorDims(params->weight_, 2);
+  CheckTensorDims(params->bias_, 1);
 
   // Check the consistency of the tensor shapes
   // Check the number of input dimensions
-  Assert(x->base_.shape_[1] == weight->base_.shape_[1],
+  Assert(x->base_.shape_[1] == params->weight_->base_.shape_[1],
          "The number of input dimensions is not consistent: "
-         "(`x`: %d, `weight`: %d)",
-         x->base_.shape_[1], weight->base_.shape_[1]);
+         "(`x`: %d, `params->weight_`: %d)",
+         x->base_.shape_[1], params->weight_->base_.shape_[1]);
 
   // Check the number of output dimensions
-  Assert(bias == NULL || weight->base_.shape_[0] == bias->base_.shape_[0],
+  Assert(params->bias_ == NULL ||
+         params->weight_->base_.shape_[0] == params->bias_->base_.shape_[0],
          "The number of output dimensions is not consistent: "
-         "(`weight`: %d, `bias`: %d)",
-         weight->base_.shape_[0], bias->base_.shape_[0]);
+         "(`params->weight_`: %d, `params->bias_`: %d)",
+         params->weight_->base_.shape_[0], params->bias_->base_.shape_[0]);
 
   const int batch_size = x->base_.shape_[0];
   const int in_dims = x->base_.shape_[1];
-  const int out_dims = weight->base_.shape_[0];
+  const int out_dims = params->weight_->base_.shape_[0];
 
   // Set the shape of the output tensor if necessary
   TensorSetShape((Tensor*)y, 2, batch_size, out_dims);
@@ -53,11 +77,11 @@ void LinearForward(const FloatTensor* x,
       float val = 0;
 
       for (int j = 0; j < in_dims; ++j) {
-        val += TensorAt2d(x, b, j) * TensorAt2d(weight, i, j);
+        val += TensorAt2d(x, b, j) * TensorAt2d(params->weight_, i, j);
       }
 
-      if (bias != NULL)
-        TensorAt2d(y, b, i) = val + TensorAt1d(bias, i);
+      if (params->bias_ != NULL)
+        TensorAt2d(y, b, i) = val + TensorAt1d(params->bias_, i);
       else
         TensorAt2d(y, b, i) = val;
     }
@@ -68,31 +92,29 @@ void LinearForward(const FloatTensor* x,
 // `dy` should be of size (B, Dout)
 // `x` should be of size (B, Din)
 // The returned tensor `dx` is of size (B, Din)
-// The returned tensor `dweight` is of size (Dout, Din)
-// The returned tensor `dbias` is of size (Dout)
-// `weight` should be of size (Dout, Din)
-// `bias` should be of size (Dout)
-// `bias` may be `NULL`
+// The returned tensor `dparams->weight_` is of size (Dout, Din)
+// The returned tensor `dparams->bias_` is of size (Dout)
+// `params->weight_` should be of size (Dout, Din)
+// `params->bias_` should be of size (Dout)
+// `params->bias_` may be `NULL`
 void LinearBackward(const FloatTensor* dy,
                     const FloatTensor* x,
                     FloatTensor* dx,
-                    FloatTensor* dweight,
-                    FloatTensor* dbias,
-                    const FloatTensor* weight,
-                    const FloatTensor* bias)
+                    LinearParams* dparams,
+                    const LinearParams* params)
 {
   // The input and output tensors should not be NULL except `dbias` and `bias`
   CheckTensor(dy);
   CheckTensor(x);
   CheckTensor(dx);
-  CheckTensor(dweight);
-  CheckTensor(weight);
+  CheckTensor(dparams->weight_);
+  CheckTensor(params->weight_);
 
   // Check the dimensions of the input tensors
   CheckTensorDims(dy, 2);
   CheckTensorDims(x, 2);
-  CheckTensorDims(weight, 2);
-  CheckTensorDims(bias, 1);
+  CheckTensorDims(params->weight_, 2);
+  CheckTensorDims(params->bias_, 1);
 
   // Check the consistency of the tensor shapes
   // Check the batch size
@@ -101,21 +123,22 @@ void LinearBackward(const FloatTensor* dy,
          dy->base_.shape_[0], x->base_.shape_[0]);
 
   // Check the number of input dimensions
-  Assert(x->base_.shape_[1] == weight->base_.shape_[1],
+  Assert(x->base_.shape_[1] == params->weight_->base_.shape_[1],
          "The number of input dimensions is not consistent: "
-         "(`x`: %d, `weight`: %d)",
-         x->base_.shape_[1], weight->base_.shape_[1]);
+         "(`x`: %d, `params->weight_`: %d)",
+         x->base_.shape_[1], params->weight_->base_.shape_[1]);
 
   // Check the number of output dimensions
-  Assert(dy->base_.shape_[1] == weight->base_.shape_[0],
+  Assert(dy->base_.shape_[1] == params->weight_->base_.shape_[0],
          "The number of output dimensions is not consistent: "
-         "(`dy`: %d, `weight`: %d)",
-         dy->base_.shape_[1], weight->base_.shape_[0]);
+         "(`dy`: %d, `params->weight_`: %d)",
+         dy->base_.shape_[1], params->weight_->base_.shape_[0]);
 
-  Assert(bias == NULL || weight->base_.shape_[0] == bias->base_.shape_[0],
+  Assert(params->bias_ == NULL ||
+         params->weight_->base_.shape_[0] == params->bias_->base_.shape_[0],
          "The number of output channels is not consistent: "
-         "(`weight`: %d, `bias`: %d)",
-         weight->base_.shape_[0], bias->base_.shape_[0]);
+         "(`params->weight_`: %d, `params->bias_`: %d)",
+         params->weight_->base_.shape_[0], params->bias_->base_.shape_[0]);
 
   const int batch_size = dy->base_.shape_[0];
   const int out_dims = dy->base_.shape_[1];
@@ -123,10 +146,10 @@ void LinearBackward(const FloatTensor* dy,
 
   // Set the shape of the output tensor if necessary
   TensorSetShapeLike((Tensor*)dx, (const Tensor*)x);
-  TensorSetShapeLike((Tensor*)dweight, (const Tensor*)weight);
+  TensorSetShapeLike((Tensor*)dparams->weight_, (const Tensor*)params->weight_);
 
-  if (bias != NULL)
-    TensorSetShapeLike((Tensor*)dbias, (const Tensor*)bias);
+  if (params->bias_ != NULL)
+    TensorSetShapeLike((Tensor*)dparams->bias_, (const Tensor*)params->bias_);
 
   // Perform the backpropagation for the fully-connected layer
   // Compute the gradient for the weight
@@ -138,7 +161,7 @@ void LinearBackward(const FloatTensor* dy,
         val += TensorAt2d(x, b, j) * TensorAt2d(dy, b, i);
       }
 
-      TensorAt2d(dweight, i, j) = val;
+      TensorAt2d(dparams->weight_, i, j) = val;
     }
   }
 
@@ -150,7 +173,7 @@ void LinearBackward(const FloatTensor* dy,
       val += TensorAt2d(dy, b, i);
     }
 
-    TensorAt1d(dbias, i) = val;
+    TensorAt1d(dparams->bias_, i) = val;
   }
 
   // Compute the gradient for the input
@@ -159,7 +182,7 @@ void LinearBackward(const FloatTensor* dy,
       float val = 0;
 
       for (int i = 0; i < out_dims; ++i) {
-        val += TensorAt2d(weight, i, j) * TensorAt2d(dy, b, i);
+        val += TensorAt2d(params->weight_, i, j) * TensorAt2d(dy, b, i);
       }
 
       TensorAt2d(dx, b, j) = val;
