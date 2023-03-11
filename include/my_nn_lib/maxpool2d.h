@@ -10,6 +10,29 @@ extern "C" {
 
 #include "my_nn_lib/tensor.h"
 
+// Parameters for the 2D max-pooling layer
+typedef struct
+{
+  // Kernel height
+  int kernel_height_;
+  // Kernel width
+  int kernel_width_;
+  // Stride
+  int stride_;
+  // Padding
+  int padding_;
+} MaxPool2dParams;
+
+// Initialize the parameters for the 2D max-pooling layer
+void MaxPool2dParamsInitialize(MaxPool2dParams* params,
+                               const int kernel_height,
+                               const int kernel_width,
+                               const int stride,
+                               const int padding);
+
+// Free the parameters for the 2D max-pooling layer
+void MaxPool2dParamsFree(MaxPool2dParams* params);
+
 // Forward operation for the 2D max-pooling
 // `x` should be of size (B, C, Hin, Win)
 // The returned tensor `y` is of size (B, C, Hout, Wout)
@@ -17,10 +40,7 @@ extern "C" {
 void MaxPool2dForward(const FloatTensor* x,
                       FloatTensor* y,
                       Index2dTensor* mask,
-                      const int kernel_height,
-                      const int kernel_width,
-                      const int stride,
-                      const int padding);
+                      const MaxPool2dParams* params);
 
 // Backward operation for the 2D max-pooling
 // `dy` should be of size (B, C, Hout, Wout)
@@ -31,10 +51,7 @@ void MaxPool2dBackward(const FloatTensor* dy,
                        const Index2dTensor* mask,
                        const FloatTensor* x,
                        FloatTensor* dx,
-                       const int kernel_height,
-                       const int kernel_width,
-                       const int stride,
-                       const int padding);
+                       const MaxPool2dParams* params);
 
 #ifdef __cplusplus
 }
