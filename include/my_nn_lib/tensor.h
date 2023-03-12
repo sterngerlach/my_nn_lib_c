@@ -113,6 +113,12 @@ void TensorSetShape(Tensor* tensor,
 void TensorSetShapeLike(Tensor* tensor,
                         const Tensor* src);
 
+// Fill the tensor with zeros (works on scalar types only)
+void TensorFillWithZeros(Tensor* tensor);
+
+// Fill the tensor with ones (works on scalar types only)
+void TensorFillWithOnes(Tensor* tensor);
+
 // Free a tensor
 void TensorFree(Tensor** tensor);
 

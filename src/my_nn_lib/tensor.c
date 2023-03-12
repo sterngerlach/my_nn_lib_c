@@ -142,6 +142,33 @@ static void TensorSetData(Tensor* tensor,
   }
 }
 
+// Fill an int tensor with the given value
+static void IntTensorFill(IntTensor* tensor,
+                          const int val)
+{
+  // We treat the input tensor as a 1D tensor
+  for (int i = 0; i < tensor->base_.numel_; ++i)
+    TensorAt1d(tensor, i) = val;
+}
+
+// Fill a float tensor with the given value
+static void FloatTensorFill(FloatTensor* tensor,
+                            const float val)
+{
+  // We treat the input tensor as a 1D tensor
+  for (int i = 0; i < tensor->base_.numel_; ++i)
+    TensorAt1d(tensor, i) = val;
+}
+
+// Fill a 8-bit unsigned integer tensor with the given value
+static void U8TensorFill(U8Tensor* tensor,
+                         const uint8_t val)
+{
+  // We treat the input tensor as a 1D tensor
+  for (int i = 0; i < tensor->base_.numel_; ++i)
+    TensorAt1d(tensor, i) = val;
+}
+
 // Create a new ND tensor
 static Tensor* TensorEmptyNdCore(const enum TensorDataType dtype,
                                  const bool fill_with_zeros,
@@ -361,6 +388,48 @@ void TensorSetShapeLike(Tensor* tensor,
                         const Tensor* src)
 {
   TensorSetShapeLikeCore(tensor, src);
+}
+
+// Fill the tensor with zeros (works on scalar types only)
+void TensorFillWithZeros(Tensor* tensor)
+{
+  CheckTensor(tensor);
+
+  switch (tensor->dtype_) {
+    case TENSOR_TYPE_INT:
+      IntTensorFill((IntTensor*)tensor, 0);
+      break;
+    case TENSOR_TYPE_FLOAT:
+      FloatTensorFill((FloatTensor*)tensor, 0.0f);
+      break;
+    case TENSOR_TYPE_U8:
+      U8TensorFill((U8Tensor*)tensor, 0);
+      break;
+    default:
+      Assert(0, "`tensor->dtype_` should be a scalar type");
+      break;
+  }
+}
+
+// Fill the tensor with ones (works on scalar types only)
+void TensorFillWithOnes(Tensor* tensor)
+{
+  CheckTensor(tensor);
+
+  switch (tensor->dtype_) {
+    case TENSOR_TYPE_INT:
+      IntTensorFill((IntTensor*)tensor, 1);
+      break;
+    case TENSOR_TYPE_FLOAT:
+      FloatTensorFill((FloatTensor*)tensor, 1.0f);
+      break;
+    case TENSOR_TYPE_U8:
+      U8TensorFill((U8Tensor*)tensor, 1);
+      break;
+    default:
+      Assert(0, "`tensor->dtype_` should be a scalar type");
+      break;
+  }
 }
 
 // Free a tensor
