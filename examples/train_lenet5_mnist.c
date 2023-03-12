@@ -33,22 +33,20 @@ typedef struct
 
 typedef struct
 {
-  FloatTensor*   x0_;
-  FloatTensor*   x1_;
-  FloatTensor*   x2_;
-  Index2dTensor* mask0_;
-  FloatTensor*   x3_;
-  FloatTensor*   x4_;
-  FloatTensor*   x5_;
-  Index2dTensor* mask1_;
-  FloatTensor*   x6_;
-  FloatTensor*   x7_;
-  FloatTensor*   x8_;
-  FloatTensor*   x9_;
-  FloatTensor*   x10_;
-  FloatTensor*   x11_;
-  FloatTensor*   x12_;
-  FloatTensor*   x13_;
+  Conv2dOutputs           conv0_;
+  ActivationOutputs       relu0_;
+  MaxPool2dOutputs        pool0_;
+  Conv2dOutputs           conv1_;
+  ActivationOutputs       relu1_;
+  MaxPool2dOutputs        pool1_;
+  FlattenOutputs          flatten0_;
+  LinearOutputs           linear0_;
+  ActivationOutputs       relu2_;
+  LinearOutputs           linear1_;
+  ActivationOutputs       relu3_;
+  LinearOutputs           linear2_;
+  ActivationOutputs       relu4_;
+  CrossEntropyLossOutputs loss_;
 } LayerOutputs;
 
 void LeNet5ParamsInitialize(LeNet5Params* params)
@@ -90,44 +88,42 @@ void LeNet5ParamsDestroy(LeNet5Params* params)
 
 void LayerOutputsInitialize(LayerOutputs* outputs)
 {
-  outputs->x0_ = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
-  outputs->x1_ = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
-  outputs->x2_ = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
-  outputs->x3_ = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
-  outputs->x4_ = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
-  outputs->x5_ = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
-  outputs->x6_ = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
-  outputs->x7_ = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
-  outputs->x8_ = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
-  outputs->x9_ = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
-  outputs->x10_ = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
-  outputs->x11_ = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
-  outputs->x12_ = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
-  outputs->x13_ = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
+  Conv2dOutputsInitialize(&outputs->conv0_, false);
+  ActivationOutputsInitialize(&outputs->relu0_, false);
+  MaxPool2dOutputsInitialize(&outputs->pool0_, false);
+  Conv2dOutputsInitialize(&outputs->conv1_, false);
+  ActivationOutputsInitialize(&outputs->relu1_, false);
+  MaxPool2dOutputsInitialize(&outputs->pool1_, false);
+  FlattenOutputsInitialize(&outputs->flatten0_, false);
 
-  outputs->mask0_ = (Index2dTensor*)TensorAllocate(TENSOR_TYPE_INDEX2D);
-  outputs->mask1_ = (Index2dTensor*)TensorAllocate(TENSOR_TYPE_INDEX2D);
+  LinearOutputsInitialize(&outputs->linear0_, false);
+  ActivationOutputsInitialize(&outputs->relu2_, false);
+  LinearOutputsInitialize(&outputs->linear1_, false);
+  ActivationOutputsInitialize(&outputs->relu3_, false);
+  LinearOutputsInitialize(&outputs->linear2_, false);
+  ActivationOutputsInitialize(&outputs->relu4_, false);
+
+  CrossEntropyLossOutputsInitialize(&outputs->loss_, false);
 }
 
 void LayerOutputsDestroy(LayerOutputs* outputs)
 {
-  TensorFree((Tensor**)&outputs->x0_);
-  TensorFree((Tensor**)&outputs->x1_);
-  TensorFree((Tensor**)&outputs->x2_);
-  TensorFree((Tensor**)&outputs->x3_);
-  TensorFree((Tensor**)&outputs->x4_);
-  TensorFree((Tensor**)&outputs->x5_);
-  TensorFree((Tensor**)&outputs->x6_);
-  TensorFree((Tensor**)&outputs->x7_);
-  TensorFree((Tensor**)&outputs->x8_);
-  TensorFree((Tensor**)&outputs->x9_);
-  TensorFree((Tensor**)&outputs->x10_);
-  TensorFree((Tensor**)&outputs->x11_);
-  TensorFree((Tensor**)&outputs->x12_);
-  TensorFree((Tensor**)&outputs->x13_);
+  Conv2dOutputsFree(&outputs->conv0_);
+  ActivationOutputsFree(&outputs->relu0_);
+  MaxPool2dOutputsFree(&outputs->pool0_);
+  Conv2dOutputsFree(&outputs->conv1_);
+  ActivationOutputsFree(&outputs->relu1_);
+  MaxPool2dOutputsFree(&outputs->pool1_);
+  FlattenOutputsFree(&outputs->flatten0_);
 
-  TensorFree((Tensor**)&outputs->mask0_);
-  TensorFree((Tensor**)&outputs->mask1_);
+  LinearOutputsFree(&outputs->linear0_);
+  ActivationOutputsFree(&outputs->relu2_);
+  LinearOutputsFree(&outputs->linear1_);
+  ActivationOutputsFree(&outputs->relu3_);
+  LinearOutputsFree(&outputs->linear2_);
+  ActivationOutputsFree(&outputs->relu4_);
+
+  CrossEntropyLossOutputsFree(&outputs->loss_);
 }
 
 void OptimizerInitialize(TensorListEntry* optim_params,
@@ -188,98 +184,80 @@ void OptimizerDestroy(TensorListEntry* optim_params,
   TensorListFree(optim_gradients);
 }
 
-float LeNet5Forward(const FloatTensor* x,
-                    LayerOutputs* outputs,
-                    const IntTensor* target,
-                    const LeNet5Params* params)
+void LeNet5Forward(const FloatTensor* x,
+                   const IntTensor* target,
+                   const LeNet5Params* params,
+                   LayerOutputs* outputs)
 {
   // `x` is of size (B, 1, 28, 28)
-  // `x0_` and `x1_` are of size (B, 6, 28, 28)
-  Conv2dForward(x, outputs->x0_, &params->conv0_);
-  ReLUForward(outputs->x0_, outputs->x1_);
+  // `outputs->conv0_.y_` and `outputs->relu0_.y_` are of size (B, 6, 28, 28)
+  Conv2dForward(x, &outputs->conv0_, &params->conv0_);
+  ReLUForward(outputs->conv0_.y_, &outputs->relu0_);
 
-  // `x2_` is of size (B, 6, 14, 14)
-  MaxPool2dForward(outputs->x1_, outputs->x2_, outputs->mask0_,
-                   &params->pool0_);
+  // `outputs->pool0_.y_` is of size (B, 6, 14, 14)
+  MaxPool2dForward(outputs->relu0_.y_, &outputs->pool0_, &params->pool0_);
 
-  // `x3_` and `x4_` are of size (B, 16, 10, 10)
-  Conv2dForward(outputs->x2_, outputs->x3_, &params->conv1_);
-  ReLUForward(outputs->x3_, outputs->x4_);
+  // `outputs->conv1_.y_` and `outputs->relu1_.y_` are of size (B, 16, 10, 10)
+  Conv2dForward(outputs->pool0_.y_, &outputs->conv1_, &params->conv1_);
+  ReLUForward(outputs->conv1_.y_, &outputs->relu1_);
 
-  // `x5_` is of size (B, 16, 5, 5)
-  MaxPool2dForward(outputs->x4_, outputs->x5_, outputs->mask1_,
-                   &params->pool1_);
+  // `outputs->pool1_.y_` is of size (B, 16, 5, 5)
+  MaxPool2dForward(outputs->relu1_.y_, &outputs->pool1_, &params->pool1_);
 
-  // `x6_` is of size (B, 400)
-  FlattenForward(outputs->x5_, outputs->x6_);
+  // `outputs->flatten0_.y_` is of size (B, 400)
+  FlattenForward(outputs->pool1_.y_, &outputs->flatten0_);
 
-  // `x7_` and `x8_` are of size (B, 120)
-  LinearForward(outputs->x6_, outputs->x7_, &params->linear0_);
-  ReLUForward(outputs->x7_, outputs->x8_);
+  // `outputs->linear0_.y_` and `outputs->relu2_.y_` are of size (B, 120)
+  LinearForward(outputs->flatten0_.y_, &outputs->linear0_, &params->linear0_);
+  ReLUForward(outputs->linear0_.y_, &outputs->relu2_);
 
-  // `x9_` and `x10_` are of size (B, 84)
-  LinearForward(outputs->x8_, outputs->x9_, &params->linear1_);
-  ReLUForward(outputs->x9_, outputs->x10_);
+  // `outputs->linear1_.y_` and `outputs->relu3_.y_` are of size (B, 84)
+  LinearForward(outputs->relu2_.y_, &outputs->linear1_, &params->linear1_);
+  ReLUForward(outputs->linear1_.y_, &outputs->relu3_);
 
-  // `x11_` and `x12_` are of size (B, 10)
-  LinearForward(outputs->x10_, outputs->x11_, &params->linear2_);
-  ReLUForward(outputs->x11_, outputs->x12_);
+  // `outputs->linear2_.y_` and `outputs->relu4_.y_` are of size (B, 10)
+  LinearForward(outputs->relu3_.y_, &outputs->linear2_, &params->linear2_);
+  ReLUForward(outputs->linear2_.y_, &outputs->relu4_);
 
-  // `x13_` is of size (B, 10)
-  float loss = CrossEntropyLossForward(outputs->x12_, target, outputs->x13_);
-  return loss;
+  // `outputs->loss_.y_` is of size (B, 10)
+  CrossEntropyLossForward(outputs->relu4_.y_, target, &outputs->loss_);
 }
 
 void LeNet5Backward(const LeNet5Params* params,
-                    const LayerOutputs* outputs,
-                    const IntTensor* target,
                     const FloatTensor* x,
-                    FloatTensor* dx,
-                    LeNet5Params* grad_params,
-                    LayerOutputs* grad_outputs)
+                    const IntTensor* target,
+                    LayerOutputs* outputs,
+                    LeNet5Params* grad_params)
 {
-  // `x13_` and `x12_` are of size (B, 10)
-  CrossEntropyLossBackward(outputs->x13_, target, grad_outputs->x12_);
+  CrossEntropyLossBackward(target, &outputs->loss_);
 
-  // `x11_` is of size (B, 10)
-  ReLUBackward(grad_outputs->x12_, outputs->x11_, grad_outputs->x11_);
-  // `x10_` is of size (B, 84)
-  LinearBackward(grad_outputs->x11_, outputs->x10_, grad_outputs->x10_,
+  ReLUBackward(outputs->loss_.dx_, outputs->linear2_.y_, &outputs->relu4_);
+  LinearBackward(outputs->relu4_.dx_, outputs->relu3_.y_, &outputs->linear2_,
                  &grad_params->linear2_, &params->linear2_);
 
-  // `x9_` is of size (B, 84)
-  ReLUBackward(grad_outputs->x10_, outputs->x9_, grad_outputs->x9_);
-  // `x8_` is of size (B, 120)
-  LinearBackward(grad_outputs->x9_, outputs->x8_, grad_outputs->x8_,
+  ReLUBackward(outputs->linear2_.dx_, outputs->linear1_.y_, &outputs->relu3_);
+  LinearBackward(outputs->relu3_.dx_, outputs->relu2_.y_, &outputs->linear1_,
                  &grad_params->linear1_, &params->linear1_);
 
-  // `x7_` is of size (B, 120)
-  ReLUBackward(grad_outputs->x8_, outputs->x7_, grad_outputs->x7_);
-  // `x6_` is of size (B, 400)
-  LinearBackward(grad_outputs->x7_, outputs->x6_, grad_outputs->x6_,
+  ReLUBackward(outputs->linear1_.dx_, outputs->linear0_.y_, &outputs->relu2_);
+  LinearBackward(outputs->relu2_.dx_, outputs->flatten0_.y_, &outputs->linear0_,
                  &grad_params->linear0_, &params->linear0_);
 
-  // `x5_` is of size (B, 16, 5, 5)
-  FlattenBackward(grad_outputs->x6_, outputs->x5_, grad_outputs->x5_);
+  FlattenBackward(outputs->linear0_.dx_, outputs->pool1_.y_,
+                  &outputs->flatten0_);
 
-  // `x4_` is of size (B, 16, 10, 10)
-  MaxPool2dBackward(grad_outputs->x5_, outputs->mask1_,
-                    outputs->x4_, grad_outputs->x4_, &params->pool1_);
+  MaxPool2dBackward(outputs->flatten0_.dx_, outputs->relu1_.y_,
+                    &outputs->pool1_, &params->pool1_);
 
-  // `x3_` is of size (B, 16, 10, 10)
-  ReLUBackward(grad_outputs->x4_, outputs->x3_, grad_outputs->x3_);
-  // `x2_` is of size (B, 6, 14, 14)
-  Conv2dBackward(grad_outputs->x3_, outputs->x2_, grad_outputs->x2_,
+  ReLUBackward(outputs->pool1_.dx_, outputs->conv1_.y_, &outputs->relu1_);
+  Conv2dBackward(outputs->relu1_.dx_, outputs->pool0_.y_, &outputs->conv1_,
                  &grad_params->conv1_, &params->conv1_);
 
-  // `x1_` is of size (B, 6, 28, 28)
-  MaxPool2dBackward(grad_outputs->x2_, outputs->mask0_,
-                    outputs->x1_, grad_outputs->x1_, &params->pool0_);
+  MaxPool2dBackward(outputs->conv1_.dx_, outputs->relu0_.y_,
+                    &outputs->pool0_, &params->pool0_);
 
-  // `x0_` is of size (B, 6, 28, 28)
-  ReLUBackward(grad_outputs->x1_, outputs->x0_, grad_outputs->x0_);
-  // `x` is of size (B, 1, 28, 28)
-  Conv2dBackward(grad_outputs->x0_, x, dx,
+  ReLUBackward(outputs->pool0_.dx_, outputs->conv0_.y_, &outputs->relu0_);
+  Conv2dBackward(outputs->relu0_.dx_, x, &outputs->conv0_,
                  &grad_params->conv0_, &params->conv0_);
 }
 
@@ -336,13 +314,11 @@ void LoadMNISTDataset(const char* dataset_dir,
 void TrainEpoch(const int epoch,
                 const int batch_size,
                 FloatTensor* x,
-                FloatTensor* dx,
                 IntTensor* target,
                 IntTensor* estimated,
                 LeNet5Params* model_params,
                 LeNet5Params* grad_params,
                 LayerOutputs* layer_outputs,
-                LayerOutputs* grad_outputs,
                 OptimizerSGD* optimizer,
                 TensorListEntry* optim_params,
                 TensorListEntry* optim_gradients,
@@ -397,23 +373,22 @@ void TrainEpoch(const int epoch,
     }
 
     // Perform the forward operation
-    const float loss = LeNet5Forward(x, layer_outputs, target, model_params);
+    LeNet5Forward(x, target, model_params, layer_outputs);
 
     // Perform the backward operation
-    LeNet5Backward(model_params, layer_outputs, target, x, dx,
-                   grad_params, grad_outputs);
+    LeNet5Backward(model_params, x, target, layer_outputs, grad_params);
 
     // Update the parameters
     LeNet5UpdateParams((Optimizer*)optimizer, optim_params, optim_gradients);
 
     // Compute the loss
     if (b == 0)
-      train_loss = loss;
+      train_loss = layer_outputs->loss_.loss_;
     else
-      train_loss = train_loss * 0.95f + loss * 0.05f;
+      train_loss = train_loss * 0.95f + layer_outputs->loss_.loss_ * 0.05f;
 
     // Compute the accuracy
-    FloatTensor2dArgMax(estimated, layer_outputs->x13_);
+    FloatTensor2dArgMax(estimated, layer_outputs->loss_.y_);
 
     for (int b1 = 0; b1 < num_samples_in_batch; ++b1)
       if (TensorAt1d(estimated, b1) == TensorAt1d(target, b1))
@@ -421,15 +396,16 @@ void TrainEpoch(const int epoch,
 
     if (b % 10 == 0) {
       train_accuracy = (float)num_correct / (float)num_samples_used;
-      LogInfo("Train epoch %d, batch: %d, accuracy: %.3f%% (%d/%d)",
-              epoch, b, train_accuracy * 100.0f,
+      LogInfo("Train epoch %d, batch: %d, loss: %.3f, "
+              "accuracy: %.3f%% (%d/%d)",
+              epoch, b, train_loss, train_accuracy * 100.0f,
               num_correct, num_samples_used);
     }
   }
 
   train_accuracy = (float)num_correct / (float)num_samples;
-  LogInfo("Train epoch %d, accuracy: %.3f%% (%d/%d)",
-          epoch, train_accuracy * 100.0f,
+  LogInfo("Train epoch %d, loss: %.3f, accuracy: %.3f%% (%d/%d)",
+          epoch, train_loss, train_accuracy * 100.0f,
           num_correct, num_samples);
 }
 
@@ -482,16 +458,16 @@ void TestEpoch(const int epoch,
     }
 
     // Perform the forward operation
-    const float loss = LeNet5Forward(x, layer_outputs, target, model_params);
+    LeNet5Forward(x, target, model_params, layer_outputs);
 
     // Compute the loss
     if (b == 0)
-      test_loss = loss;
+      test_loss = layer_outputs->loss_.loss_;
     else
-      test_loss = test_loss * 0.95f + loss * 0.05f;
+      test_loss = test_loss * 0.95f + layer_outputs->loss_.loss_ * 0.05f;
 
     // Compute the accuracy
-    FloatTensor2dArgMax(estimated, layer_outputs->x13_);
+    FloatTensor2dArgMax(estimated, layer_outputs->loss_.y_);
 
     for (int b1 = 0; b1 < num_samples_in_batch; ++b1)
       if (TensorAt1d(estimated, b1) == TensorAt1d(target, b1))
@@ -499,15 +475,16 @@ void TestEpoch(const int epoch,
 
     if (b % 10 == 0) {
       test_accuracy = (float)num_correct / (float)num_samples_used;
-      LogInfo("Test epoch %d, batch: %d, accuracy: %.3f%% (%d/%d)",
-              epoch, b, test_accuracy * 100.0f,
+      LogInfo("Test epoch %d, batch: %d, loss: %.3f, "
+              "accuracy: %.3f%% (%d/%d)",
+              epoch, b, test_loss, test_accuracy * 100.0f,
               num_correct, num_samples_used);
     }
   }
 
   test_accuracy = (float)num_correct / (float)num_samples;
-  LogInfo("Test epoch %d, accuracy: %.3f%% (%d/%d)",
-          epoch, test_accuracy * 100.0f,
+  LogInfo("Test epoch %d, loss: %.3f, accuracy: %.3f%% (%d/%d)",
+          epoch, test_loss, test_accuracy * 100.0f,
           num_correct, num_samples);
 }
 
@@ -531,11 +508,9 @@ int main(int argc, char** argv)
   LeNet5Params model_params;
   LeNet5Params grad_params;
   LayerOutputs layer_outputs;
-  LayerOutputs grad_outputs;
   LeNet5ParamsInitialize(&model_params);
   LeNet5ParamsInitialize(&grad_params);
   LayerOutputsInitialize(&layer_outputs);
-  LayerOutputsInitialize(&grad_outputs);
 
   // Initialize a SGD optimizer
   const float learning_rate = 1e-1f;
@@ -553,7 +528,6 @@ int main(int argc, char** argv)
 
   // Create a tensor for the batch input
   FloatTensor* x = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
-  FloatTensor* dx = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
   IntTensor* target = (IntTensor*)TensorAllocate(TENSOR_TYPE_INT);
   IntTensor* estimated = (IntTensor*)TensorAllocate(TENSOR_TYPE_INT);
 
@@ -564,8 +538,8 @@ int main(int argc, char** argv)
     LogInfo("Epoch %d ...", epoch);
 
     // Perform the training
-    TrainEpoch(epoch, batch_size, x, dx, target, estimated,
-               &model_params, &grad_params, &layer_outputs, &grad_outputs,
+    TrainEpoch(epoch, batch_size, x, target, estimated,
+               &model_params, &grad_params, &layer_outputs,
                optimizer, &optim_params, &optim_gradients,
                train_samples_perm, train_images, train_labels);
 
@@ -576,7 +550,6 @@ int main(int argc, char** argv)
 
   // Free the tensors
   TensorFree((Tensor**)&x);
-  TensorFree((Tensor**)&dx);
   TensorFree((Tensor**)&target);
   TensorFree((Tensor**)&estimated);
   TensorFree((Tensor**)&train_samples_perm);
@@ -589,7 +562,6 @@ int main(int argc, char** argv)
   LeNet5ParamsDestroy(&model_params);
   LeNet5ParamsDestroy(&grad_params);
   LayerOutputsDestroy(&layer_outputs);
-  LayerOutputsDestroy(&grad_outputs);
 
   // Free the dataset
   TensorFree((Tensor**)&train_images);
