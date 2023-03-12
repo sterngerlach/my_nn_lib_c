@@ -26,13 +26,13 @@ typedef struct
 
 typedef struct
 {
-  FloatTensor* x0_;
-  FloatTensor* x1_;
-  FloatTensor* x2_;
-  FloatTensor* x3_;
-  FloatTensor* x4_;
-  FloatTensor* x5_;
-  FloatTensor* x6_;
+  LinearOutputs           linear0_;
+  ActivationOutputs       relu0_;
+  LinearOutputs           linear1_;
+  ActivationOutputs       relu1_;
+  LinearOutputs           linear2_;
+  ActivationOutputs       relu2_;
+  CrossEntropyLossOutputs loss_;
 } LayerOutputs;
 
 void ModelParamsInitialize(ModelParams* params)
@@ -58,24 +58,24 @@ void ModelParamsDestroy(ModelParams* params)
 
 void LayerOutputsInitialize(LayerOutputs* outputs)
 {
-  outputs->x0_ = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
-  outputs->x1_ = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
-  outputs->x2_ = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
-  outputs->x3_ = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
-  outputs->x4_ = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
-  outputs->x5_ = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
-  outputs->x6_ = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
+  LinearOutputsInitialize(&outputs->linear0_, false);
+  ActivationOutputsInitialize(&outputs->relu0_, false);
+  LinearOutputsInitialize(&outputs->linear1_, false);
+  ActivationOutputsInitialize(&outputs->relu1_, false);
+  LinearOutputsInitialize(&outputs->linear2_, false);
+  ActivationOutputsInitialize(&outputs->relu2_, false);
+  CrossEntropyLossOutputsInitialize(&outputs->loss_, false);
 }
 
 void LayerOutputsDestroy(LayerOutputs* outputs)
 {
-  TensorFree((Tensor**)&outputs->x0_);
-  TensorFree((Tensor**)&outputs->x1_);
-  TensorFree((Tensor**)&outputs->x2_);
-  TensorFree((Tensor**)&outputs->x3_);
-  TensorFree((Tensor**)&outputs->x4_);
-  TensorFree((Tensor**)&outputs->x5_);
-  TensorFree((Tensor**)&outputs->x6_);
+  LinearOutputsFree(&outputs->linear0_);
+  ActivationOutputsFree(&outputs->relu0_);
+  LinearOutputsFree(&outputs->linear1_);
+  ActivationOutputsFree(&outputs->relu1_);
+  LinearOutputsFree(&outputs->linear2_);
+  ActivationOutputsFree(&outputs->relu2_);
+  CrossEntropyLossOutputsFree(&outputs->loss_);
 }
 
 void OptimizerInitialize(TensorListEntry* optim_params,
@@ -120,59 +120,46 @@ void OptimizerDestroy(TensorListEntry* optim_params,
   TensorListFree(optim_gradients);
 }
 
-float ModelForward(const FloatTensor* x,
-                   LayerOutputs* outputs,
-                   const IntTensor* target,
-                   const ModelParams* params)
+void ModelForward(const FloatTensor* x,
+                  const IntTensor* target,
+                  const ModelParams* params,
+                  LayerOutputs* outputs)
 {
   // `x` is of size (B, 784)
-  // `x0_` and `x1_` are of size (B, 256)
-  LinearForward(x, outputs->x0_, &params->linear0_);
-  ReLUForward(outputs->x0_, outputs->x1_);
+  // `outputs->linear0_.y_` and `outputs->relu0_.y_` are of size (B, 256)
+  LinearForward(x, &outputs->linear0_, &params->linear0_);
+  ReLUForward(outputs->linear0_.y_, &outputs->relu0_);
 
-  // `x2_` and `x3_` are of size (B, 64)
-  LinearForward(outputs->x1_, outputs->x2_, &params->linear1_);
-  ReLUForward(outputs->x2_, outputs->x3_);
+  // `outputs->linear1_.y_` and `outputs->relu1_.y_` are of size (B, 64)
+  LinearForward(outputs->relu0_.y_, &outputs->linear1_, &params->linear1_);
+  ReLUForward(outputs->linear1_.y_, &outputs->relu1_);
 
-  // `x4_` and `x5_` are of size (B, 10)
-  LinearForward(outputs->x3_, outputs->x4_, &params->linear2_);
-  ReLUForward(outputs->x4_, outputs->x5_);
+  // `outputs->linear2_.y_` and `outputs->relu2_.y_` are of size (B, 10)
+  LinearForward(outputs->relu1_.y_, &outputs->linear2_, &params->linear2_);
+  ReLUForward(outputs->linear2_.y_, &outputs->relu2_);
 
-  // `x6_` is of size (B, 10)
-  float loss = CrossEntropyLossForward(outputs->x5_, target, outputs->x6_);
-  return loss;
+  // `outputs->loss_.y_` is of size (B, 10)
+  CrossEntropyLossForward(outputs->relu2_.y_, target, &outputs->loss_);
 }
 
 void ModelBackward(const ModelParams* params,
-                   const LayerOutputs* outputs,
-                   const IntTensor* target,
                    const FloatTensor* x,
-                   FloatTensor* dx,
-                   ModelParams* grad_params,
-                   LayerOutputs* grad_outputs)
+                   const IntTensor* target,
+                   LayerOutputs* outputs,
+                   ModelParams* grad_params)
 {
-  // `x6_` and `x5_` are of size (B, 10)
-  CrossEntropyLossBackward(outputs->x6_, target, grad_outputs->x5_);
+  CrossEntropyLossBackward(target, &outputs->loss_);
 
-  // `x5_` and `x4_` are of size (B, 10)
-  ReLUBackward(grad_outputs->x5_, outputs->x4_, grad_outputs->x4_);
-
-  // `x3_` is of size (B, 64)
-  LinearBackward(grad_outputs->x4_, outputs->x3_, grad_outputs->x3_,
+  ReLUBackward(outputs->loss_.dx_, outputs->linear2_.y_, &outputs->relu2_);
+  LinearBackward(outputs->relu2_.dx_, outputs->relu1_.y_, &outputs->linear2_,
                  &grad_params->linear2_, &params->linear2_);
 
-  // `x2_` is of size (B, 64)
-  ReLUBackward(grad_outputs->x3_, outputs->x2_, grad_outputs->x2_);
-
-  // `x1_` is of size (B, 256)
-  LinearBackward(grad_outputs->x2_, outputs->x1_, grad_outputs->x1_,
+  ReLUBackward(outputs->linear2_.dx_, outputs->linear1_.y_, &outputs->relu1_);
+  LinearBackward(outputs->relu1_.dx_, outputs->relu0_.y_, &outputs->linear1_,
                  &grad_params->linear1_, &params->linear1_);
 
-  // `x0_` is of size (B, 256)
-  ReLUBackward(grad_outputs->x1_, outputs->x0_, grad_outputs->x0_);
-
-  // `x` is of size (B, 784)
-  LinearBackward(grad_outputs->x0_, x, dx,
+  ReLUBackward(outputs->linear1_.dx_, outputs->linear0_.y_, &outputs->relu0_);
+  LinearBackward(outputs->relu0_.dx_, x, &outputs->linear0_,
                  &grad_params->linear0_, &params->linear0_);
 }
 
@@ -229,13 +216,11 @@ void LoadMNISTDataset(const char* dataset_dir,
 void TrainEpoch(const int epoch,
                 const int batch_size,
                 FloatTensor* x,
-                FloatTensor* dx,
                 IntTensor* target,
                 IntTensor* estimated,
                 ModelParams* model_params,
                 ModelParams* grad_params,
                 LayerOutputs* layer_outputs,
-                LayerOutputs* grad_outputs,
                 OptimizerSGD* optimizer,
                 TensorListEntry* optim_params,
                 TensorListEntry* optim_gradients,
@@ -291,23 +276,22 @@ void TrainEpoch(const int epoch,
     }
 
     // Perform the forward operation
-    const float loss = ModelForward(x, layer_outputs, target, model_params);
+    ModelForward(x, target, model_params, layer_outputs);
 
     // Perform the backward operation
-    ModelBackward(model_params, layer_outputs, target, x, dx,
-                  grad_params, grad_outputs);
+    ModelBackward(model_params, x, target, layer_outputs, grad_params);
 
     // Update the parameters
     ModelUpdateParams((Optimizer*)optimizer, optim_params, optim_gradients);
 
     // Compute the loss
     if (b == 0)
-      train_loss = loss;
+      train_loss = layer_outputs->loss_.loss_;
     else
-      train_loss = train_loss * 0.95f + loss * 0.05f;
+      train_loss = train_loss * 0.95f + layer_outputs->loss_.loss_ * 0.05f;
 
     // Compute the accuracy
-    FloatTensor2dArgMax(estimated, layer_outputs->x6_);
+    FloatTensor2dArgMax(estimated, layer_outputs->loss_.y_);
 
     for (int b1 = 0; b1 < num_samples_in_batch; ++b1)
       if (TensorAt1d(estimated, b1) == TensorAt1d(target, b1))
@@ -315,15 +299,16 @@ void TrainEpoch(const int epoch,
 
     if (b % 50 == 0) {
       train_accuracy = (float)num_correct / (float)num_samples_used;
-      LogInfo("Train epoch %d, batch: %d, accuracy: %.3f%% (%d/%d)",
-              epoch, b, train_accuracy * 100.0f,
+      LogInfo("Train epoch %d, batch: %d, loss: %.3f, "
+              "accuracy: %.3f%% (%d/%d)",
+              epoch, b, train_loss, train_accuracy * 100.0f,
               num_correct, num_samples_used);
     }
   }
 
   train_accuracy = (float)num_correct / (float)num_samples;
-  LogInfo("Train epoch %d, accuracy: %.3f%% (%d/%d)",
-          epoch, train_accuracy * 100.0f,
+  LogInfo("Train epoch %d, loss: %.3f, accuracy: %.3f%% (%d/%d)",
+          epoch, train_loss, train_accuracy * 100.0f,
           num_correct, num_samples);
 }
 
@@ -377,16 +362,16 @@ void TestEpoch(const int epoch,
     }
 
     // Perform the forward operation
-    const float loss = ModelForward(x, layer_outputs, target, model_params);
+    ModelForward(x, target, model_params, layer_outputs);
 
     // Compute the loss
     if (b == 0)
-      test_loss = loss;
+      test_loss = layer_outputs->loss_.loss_;
     else
-      test_loss = test_loss * 0.95f + loss * 0.05f;
+      test_loss = test_loss * 0.95f + layer_outputs->loss_.loss_ * 0.05f;
 
     // Compute the accuracy
-    FloatTensor2dArgMax(estimated, layer_outputs->x6_);
+    FloatTensor2dArgMax(estimated, layer_outputs->loss_.y_);
 
     for (int b1 = 0; b1 < num_samples_in_batch; ++b1)
       if (TensorAt1d(estimated, b1) == TensorAt1d(target, b1))
@@ -394,15 +379,16 @@ void TestEpoch(const int epoch,
 
     if (b % 50 == 0) {
       test_accuracy = (float)num_correct / (float)num_samples_used;
-      LogInfo("Test epoch %d, batch: %d, accuracy: %.3f%% (%d/%d)",
-              epoch, b, test_accuracy * 100.0f,
+      LogInfo("Test epoch %d, batch: %d, loss: %.3f, "
+              "accuracy: %.3f%% (%d/%d)",
+              epoch, b, test_loss, test_accuracy * 100.0f,
               num_correct, num_samples_used);
     }
   }
 
   test_accuracy = (float)num_correct / (float)num_samples;
-  LogInfo("Test epoch %d, accuracy: %.3f%% (%d/%d)",
-          epoch, test_accuracy * 100.0f,
+  LogInfo("Test epoch %d, loss: %.3f, accuracy: %.3f%% (%d/%d)",
+          epoch, test_loss, test_accuracy * 100.0f,
           num_correct, num_samples);
 }
 
@@ -426,11 +412,9 @@ int main(int argc, char** argv)
   ModelParams model_params;
   ModelParams grad_params;
   LayerOutputs layer_outputs;
-  LayerOutputs grad_outputs;
   ModelParamsInitialize(&model_params);
   ModelParamsInitialize(&grad_params);
   LayerOutputsInitialize(&layer_outputs);
-  LayerOutputsInitialize(&grad_outputs);
 
   // Initialize a SGD optimizer
   const float learning_rate = 1e-1f;
@@ -448,7 +432,6 @@ int main(int argc, char** argv)
 
   // Create a tensor for the batch input
   FloatTensor* x = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
-  FloatTensor* dx = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
   IntTensor* target = (IntTensor*)TensorAllocate(TENSOR_TYPE_INT);
   IntTensor* estimated = (IntTensor*)TensorAllocate(TENSOR_TYPE_INT);
 
@@ -459,8 +442,8 @@ int main(int argc, char** argv)
     LogInfo("Epoch %d ...", epoch);
 
     // Perform the training
-    TrainEpoch(epoch, batch_size, x, dx, target, estimated,
-               &model_params, &grad_params, &layer_outputs, &grad_outputs,
+    TrainEpoch(epoch, batch_size, x, target, estimated,
+               &model_params, &grad_params, &layer_outputs,
                optimizer, &optim_params, &optim_gradients,
                train_samples_perm, train_images, train_labels);
 
@@ -471,7 +454,6 @@ int main(int argc, char** argv)
 
   // Free the tensors
   TensorFree((Tensor**)&x);
-  TensorFree((Tensor**)&dx);
   TensorFree((Tensor**)&target);
   TensorFree((Tensor**)&estimated);
   TensorFree((Tensor**)&train_samples_perm);
@@ -484,7 +466,6 @@ int main(int argc, char** argv)
   ModelParamsDestroy(&model_params);
   ModelParamsDestroy(&grad_params);
   LayerOutputsDestroy(&layer_outputs);
-  LayerOutputsDestroy(&grad_outputs);
 
   // Free the dataset
   TensorFree((Tensor**)&train_images);
