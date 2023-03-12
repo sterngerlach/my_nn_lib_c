@@ -19,6 +19,15 @@ typedef struct
   FloatTensor* bias_;
 } LinearParams;
 
+// Outputs for the fully-connected layer
+typedef struct
+{
+  // Output of size (B, Dout)
+  FloatTensor* y_;
+  // Gradient for the input of size (B, Din) (used for training)
+  FloatTensor* dx_;
+} LinearOutputs;
+
 // Initialize the parameters for the fully-connected layer
 void LinearParamsInitialize(LinearParams* params,
                             const int in_dims,
@@ -27,20 +36,27 @@ void LinearParamsInitialize(LinearParams* params,
 // Free the parameters for the fully-connected layer
 void LinearParamsFree(LinearParams* params);
 
+// Initialize the outputs for the fully-connected layer
+void LinearOutputsInitialize(LinearOutputs* outputs,
+                             const bool inference_only);
+
+// Free the outputs for the fully-connected layer
+void LinearOutputsFree(LinearOutputs* outputs);
+
 // Forward operation for the fully-connected layer
 // `x` should be of size (B, Din)
-// The returned tensor `y` is of size (B, Dout)
+// The returned tensor `outputs->y_` is of size (B, Dout)
 // `params->weight_` should be of size (Dout, Din)
 // `params->bias_` should be of size (Dout)
 // `params->bias_` may be `NULL`
 void LinearForward(const FloatTensor* x,
-                   FloatTensor* y,
+                   LinearOutputs* outputs,
                    const LinearParams* params);
 
 // Backward operation for the fully-connected layer
 // `dy` should be of size (B, Dout)
 // `x` should be of size (B, Din)
-// The returned tensor `dx` is of size (B, Din)
+// The returned tensor `outputs->dx_` is of size (B, Din)
 // The returned tensor `dparams->weight_` is of size (Dout, Din)
 // The returned tensor `dparams->bias_` is of size (Dout)
 // `params->weight_` should be of size (Dout, Din)
@@ -48,7 +64,7 @@ void LinearForward(const FloatTensor* x,
 // `params->bias_` may be `NULL`
 void LinearBackward(const FloatTensor* dy,
                     const FloatTensor* x,
-                    FloatTensor* dx,
+                    LinearOutputs* outputs,
                     LinearParams* dparams,
                     const LinearParams* params);
 
