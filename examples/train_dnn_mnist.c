@@ -37,9 +37,9 @@ typedef struct
 
 void ModelParamsInitialize(ModelParams* params)
 {
-  LinearParamsInitialize(&params->linear0_, 784, 512);
-  LinearParamsInitialize(&params->linear1_, 512, 128);
-  LinearParamsInitialize(&params->linear2_, 128, 10);
+  LinearParamsInitialize(&params->linear0_, 784, 512, false);
+  LinearParamsInitialize(&params->linear1_, 512, 128, false);
+  LinearParamsInitialize(&params->linear2_, 128, 10, false);
 
   FloatTensorRandomUniform(params->linear0_.weight_, -0.1f, 0.1f);
   FloatTensorRandomUniform(params->linear0_.bias_, -0.1f, 0.1f);
@@ -80,8 +80,7 @@ void LayerOutputsDestroy(LayerOutputs* outputs)
 
 void OptimizerInitialize(TensorListEntry* optim_params,
                          TensorListEntry* optim_gradients,
-                         ModelParams* params,
-                         ModelParams* gradients)
+                         ModelParams* params)
 {
   TensorListInitialize(optim_params);
   TensorListInitialize(optim_gradients);
@@ -100,17 +99,17 @@ void OptimizerInitialize(TensorListEntry* optim_params,
     (Tensor*)params->linear2_.bias_, "linear2_bias");
 
   TensorListAppend(optim_gradients,
-    (Tensor*)gradients->linear0_.weight_, "linear0_weight");
+    (Tensor*)params->linear0_.dweight_, "linear0_weight");
   TensorListAppend(optim_gradients,
-    (Tensor*)gradients->linear0_.bias_, "linear0_bias");
+    (Tensor*)params->linear0_.dbias_, "linear0_bias");
   TensorListAppend(optim_gradients,
-    (Tensor*)gradients->linear1_.weight_, "linear1_weight");
+    (Tensor*)params->linear1_.dweight_, "linear1_weight");
   TensorListAppend(optim_gradients,
-    (Tensor*)gradients->linear1_.bias_, "linear1_bias");
+    (Tensor*)params->linear1_.dbias_, "linear1_bias");
   TensorListAppend(optim_gradients,
-    (Tensor*)gradients->linear2_.weight_, "linear2_weight");
+    (Tensor*)params->linear2_.dweight_, "linear2_weight");
   TensorListAppend(optim_gradients,
-    (Tensor*)gradients->linear2_.bias_, "linear2_bias");
+    (Tensor*)params->linear2_.dbias_, "linear2_bias");
 }
 
 void OptimizerDestroy(TensorListEntry* optim_params,
@@ -142,25 +141,24 @@ void ModelForward(const FloatTensor* x,
   CrossEntropyLossForward(outputs->relu2_.y_, target, &outputs->loss_);
 }
 
-void ModelBackward(const ModelParams* params,
-                   const FloatTensor* x,
+void ModelBackward(const FloatTensor* x,
                    const IntTensor* target,
-                   LayerOutputs* outputs,
-                   ModelParams* grad_params)
+                   ModelParams* params,
+                   LayerOutputs* outputs)
 {
   CrossEntropyLossBackward(target, &outputs->loss_);
 
   ReLUBackward(outputs->loss_.dx_, outputs->linear2_.y_, &outputs->relu2_);
-  LinearBackward(outputs->relu2_.dx_, outputs->relu1_.y_, &outputs->linear2_,
-                 &grad_params->linear2_, &params->linear2_);
+  LinearBackward(outputs->relu2_.dx_, outputs->relu1_.y_,
+                 &outputs->linear2_, &params->linear2_);
 
   ReLUBackward(outputs->linear2_.dx_, outputs->linear1_.y_, &outputs->relu1_);
-  LinearBackward(outputs->relu1_.dx_, outputs->relu0_.y_, &outputs->linear1_,
-                 &grad_params->linear1_, &params->linear1_);
+  LinearBackward(outputs->relu1_.dx_, outputs->relu0_.y_,
+                 &outputs->linear1_, &params->linear1_);
 
   ReLUBackward(outputs->linear1_.dx_, outputs->linear0_.y_, &outputs->relu0_);
-  LinearBackward(outputs->relu0_.dx_, x, &outputs->linear0_,
-                 &grad_params->linear0_, &params->linear0_);
+  LinearBackward(outputs->relu0_.dx_, x,
+                 &outputs->linear0_, &params->linear0_);
 }
 
 void ModelUpdateParams(Optimizer* optimizer,
@@ -219,7 +217,6 @@ void TrainEpoch(const int epoch,
                 IntTensor* target,
                 IntTensor* estimated,
                 ModelParams* model_params,
-                ModelParams* grad_params,
                 LayerOutputs* layer_outputs,
                 OptimizerSGD* optimizer,
                 TensorListEntry* optim_params,
@@ -279,7 +276,7 @@ void TrainEpoch(const int epoch,
     ModelForward(x, target, model_params, layer_outputs);
 
     // Perform the backward operation
-    ModelBackward(model_params, x, target, layer_outputs, grad_params);
+    ModelBackward(x, target, model_params, layer_outputs);
 
     // Update the parameters
     ModelUpdateParams((Optimizer*)optimizer, optim_params, optim_gradients);
@@ -410,10 +407,8 @@ int main(int argc, char** argv)
 
   // Initialize a model
   ModelParams model_params;
-  ModelParams grad_params;
   LayerOutputs layer_outputs;
   ModelParamsInitialize(&model_params);
-  ModelParamsInitialize(&grad_params);
   LayerOutputsInitialize(&layer_outputs);
 
   // Initialize a SGD optimizer
@@ -423,8 +418,7 @@ int main(int argc, char** argv)
   // Create a list of parameters and gradients for the optimizer
   TensorListEntry optim_params;
   TensorListEntry optim_gradients;
-  OptimizerInitialize(&optim_params, &optim_gradients,
-                      &model_params, &grad_params);
+  OptimizerInitialize(&optim_params, &optim_gradients, &model_params);
 
   // Start the training
   const int num_epochs = 20;
@@ -443,7 +437,7 @@ int main(int argc, char** argv)
 
     // Perform the training
     TrainEpoch(epoch, batch_size, x, target, estimated,
-               &model_params, &grad_params, &layer_outputs,
+               &model_params, &layer_outputs,
                optimizer, &optim_params, &optim_gradients,
                train_samples_perm, train_images, train_labels);
 
@@ -464,7 +458,6 @@ int main(int argc, char** argv)
 
   // Free the model
   ModelParamsDestroy(&model_params);
-  ModelParamsDestroy(&grad_params);
   LayerOutputsDestroy(&layer_outputs);
 
   // Free the dataset
