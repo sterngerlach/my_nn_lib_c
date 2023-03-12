@@ -46,19 +46,42 @@ void Conv2dParamsFree(Conv2dParams* params)
   params->padding_ = 0;
 }
 
+// Initialize the outputs for the 2d convolution layer
+void Conv2dOutputsInitialize(Conv2dOutputs* outputs,
+                             const bool inference_only)
+{
+  Assert(outputs != NULL, "`outputs` should not be NULL");
+
+  outputs->y_ = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
+
+  if (!inference_only)
+    outputs->dx_ = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
+  else
+    outputs->dx_ = NULL;
+}
+
+// Free the outputs for the 2d convolution layer
+void Conv2dOutputsFree(Conv2dOutputs* outputs)
+{
+  Assert(outputs != NULL, "`outputs` should not be NULL");
+
+  TensorFree((Tensor**)&outputs->y_);
+  TensorFree((Tensor**)&outputs->dx_);
+}
+
 // Forward operation for the 2d convolution
 // `x` should be of size (B, Cin, Hin, Win)
 // `params->weight_` should be of size (Cout, Cin, KH, KW)
 // `params->bias_` should be of size (Cout)
 // `params->bias_` may be `NULL`
-// The returned tensor `y` is of size (B, Cout, Hout, Wout)
+// The returned tensor `outputs->y_` is of size (B, Cout, Hout, Wout)
 void Conv2dForward(const FloatTensor* x,
-                   FloatTensor* y,
+                   Conv2dOutputs* outputs,
                    const Conv2dParams* params)
 {
   // The input and output tensors should not be NULL except `bias`
   CheckTensor(x);
-  CheckTensor(y);
+  CheckTensor(outputs->y_);
   CheckTensor(params->weight_);
 
   // Check the dimensions of the input tensors
@@ -96,7 +119,7 @@ void Conv2dForward(const FloatTensor* x,
     / params->stride_ + 1;
 
   // Set the shape of the output tensor if necessary
-  TensorSetShape((Tensor*)y, 4, batch_size, out_channels,
+  TensorSetShape((Tensor*)outputs->y_, 4, batch_size, out_channels,
     out_height, out_width);
 
   // Perform the 2D convolution for each batch
@@ -123,10 +146,10 @@ void Conv2dForward(const FloatTensor* x,
           }
 
           if (params->bias_ != NULL)
-            TensorAt4d(y, b, och, oh, ow) =
+            TensorAt4d(outputs->y_, b, och, oh, ow) =
               val + TensorAt1d(params->bias_, och);
           else
-            TensorAt4d(y, b, och, oh, ow) = val;
+            TensorAt4d(outputs->y_, b, och, oh, ow) = val;
         }
       }
     }
@@ -136,7 +159,7 @@ void Conv2dForward(const FloatTensor* x,
 // Backward operation for the 2d convolution
 // `dy` should be of size (B, Cout, Hout, Wout)
 // `x` should be of size (B, Cin, Hin, Win)
-// The returned tensor `dx` is of size (B, Cin, Hin, Win)
+// The returned tensor `outputs->dx_` is of size (B, Cin, Hin, Win)
 // The returned tensor `dparams->weight_` is of size (Cout, Cin, KH, KW)
 // The returned tensor `dparams->bias_` is of size (Cout)
 // `params->weight_` should be of size (Cout, Cin, KH, KW)
@@ -144,14 +167,14 @@ void Conv2dForward(const FloatTensor* x,
 // `params->bias_` may be `NULL`
 void Conv2dBackward(const FloatTensor* dy,
                     const FloatTensor* x,
-                    FloatTensor* dx,
+                    Conv2dOutputs* outputs,
                     Conv2dParams* dparams,
                     const Conv2dParams* params)
 {
   // The input and output tensors should not be NULL except `dbias` and `bias`
   CheckTensor(dy);
   CheckTensor(x);
-  CheckTensor(dx);
+  CheckTensor(outputs->dx_);
   CheckTensor(dparams->weight_);
   CheckTensor(params->weight_);
 
@@ -220,7 +243,7 @@ void Conv2dBackward(const FloatTensor* dy,
   const int kernel_width = params->weight_->base_.shape_[3];
 
   // Set the shape of the output tensor if necessary
-  TensorSetShapeLike((Tensor*)dx, (const Tensor*)x);
+  TensorSetShapeLike((Tensor*)outputs->dx_, (const Tensor*)x);
   TensorSetShapeLike((Tensor*)dparams->weight_, (const Tensor*)params->weight_);
 
   if (params->bias_ != NULL)
@@ -306,7 +329,7 @@ void Conv2dBackward(const FloatTensor* dy,
             }
           }
 
-          TensorAt4d(dx, b, ich, ih, iw) = val;
+          TensorAt4d(outputs->dx_, b, ich, ih, iw) = val;
         }
       }
     }
