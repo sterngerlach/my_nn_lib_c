@@ -6,11 +6,54 @@
 #include "my_nn_lib/tensor_util.h"
 #include "my_nn_lib/util.h"
 
+// Initialize the outputs for the flattening operation
+void FlattenOutputsInitialize(FlattenOutputs* outputs,
+                              const bool inference_only)
+{
+  Assert(outputs != NULL, "`outputs` should not be NULL");
+
+  outputs->y_ = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
+
+  if (!inference_only)
+    outputs->dx_ = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
+  else
+    outputs->dx_ = NULL;
+}
+
+// Free the outputs for the flattening operation
+void FlattenOutputsFree(FlattenOutputs* outputs)
+{
+  Assert(outputs != NULL, "`outputs` should not be NULL");
+
+  TensorFree((Tensor**)&outputs->y_);
+  TensorFree((Tensor**)&outputs->dx_);
+}
+
+// Forward operation for the flattening operation
+// `x` should be of size (B, C0, C1, ..., Cn)
+// The returned tensor `outputs->y_` is of size (B, C0 * C1 ... * Cn)
+void FlattenForward(const FloatTensor* x,
+                    FlattenOutputs* outputs)
+{
+  FlattenForwardF(x, outputs->y_);
+}
+
+// Backward operation for the flattening operation
+// `dy` should be of size (B, C0 * C1 * ... * Cn)
+// `x` should be of size (B, C0, C1, ..., Cn)
+// The returned tensor `outputs->dx_` is of size (B, C0, C1, ..., Cn)
+void FlattenBackward(const FloatTensor* dy,
+                     const FloatTensor* x,
+                     FlattenOutputs* outputs)
+{
+  FlattenBackwardF(dy, x, outputs->dx_);
+}
+
 // Forward operation for the flattening operation
 // `x` should be of size (B, C0, C1, ..., Cn)
 // The returned tensor `y` is of size (B, C0 * C1 ... * Cn)
-void FlattenForward(const FloatTensor* x,
-                    FloatTensor* y)
+void FlattenForwardF(const FloatTensor* x,
+                     FloatTensor* y)
 {
   // The input and output tensors should not be NULL
   CheckTensor(x);
@@ -43,9 +86,9 @@ void FlattenForward(const FloatTensor* x,
 // `dy` should be of size (B, C0 * C1 * ... * Cn)
 // `x` should be of size (B, C0, C1, ..., Cn)
 // The returned tensor `dx` is of size (B, C0, C1, ..., Cn)
-void FlattenBackward(const FloatTensor* dy,
-                     const FloatTensor* x,
-                     FloatTensor* dx)
+void FlattenBackwardF(const FloatTensor* dy,
+                      const FloatTensor* x,
+                      FloatTensor* dx)
 {
   // The input and output tensors should not be NULL
   CheckTensor(dy);
