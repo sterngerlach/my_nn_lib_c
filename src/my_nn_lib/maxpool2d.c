@@ -38,19 +38,43 @@ void MaxPool2dParamsFree(MaxPool2dParams* params)
   params->padding_ = 0;
 }
 
+// Initialize the outputs for the 2D max-pooling layer
+void MaxPool2dOutputsInitialize(MaxPool2dOutputs* outputs,
+                                const bool inference_only)
+{
+  Assert(outputs != NULL, "`outputs` should not be NULL");
+
+  outputs->y_ = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
+  outputs->mask_ = (Index2dTensor*)TensorAllocate(TENSOR_TYPE_INDEX2D);
+
+  if (!inference_only)
+    outputs->dx_ = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
+  else
+    outputs->dx_ = NULL;
+}
+
+// Free the outputs for the 2D max-pooling layer
+void MaxPool2dOutputsFree(MaxPool2dOutputs* outputs)
+{
+  Assert(outputs != NULL, "`outputs` should not be NULL");
+
+  TensorFree((Tensor**)&outputs->y_);
+  TensorFree((Tensor**)&outputs->mask_);
+  TensorFree((Tensor**)&outputs->dx_);
+}
+
 // Forward operation for the 2D max-pooling
 // `x` should be of size (B, C, Hin, Win)
-// The returned tensor `y` is of size (B, C, Hout, Wout)
-// The returned tensor `mask` is of size (B, C, Hout, Wout)
+// The returned tensor `outputs->y_` is of size (B, C, Hout, Wout)
+// The returned tensor `outputs->mask_` is of size (B, C, Hout, Wout)
 void MaxPool2dForward(const FloatTensor* x,
-                      FloatTensor* y,
-                      Index2dTensor* mask,
+                      MaxPool2dOutputs* outputs,
                       const MaxPool2dParams* params)
 {
   // The input and output tensors should not be NULL
   CheckTensor(x);
-  CheckTensor(y);
-  CheckTensor(mask);
+  CheckTensor(outputs->y_);
+  CheckTensor(outputs->mask_);
 
   // Check the dimensions of the input tensors
   CheckTensorDims(x, 4);
@@ -67,10 +91,11 @@ void MaxPool2dForward(const FloatTensor* x,
     - params->kernel_width_) / params->stride_ + 1;
 
   // Set the shape of the output tensor if necessary
-  TensorSetShape((Tensor*)y, 4, batch_size, channels, out_height, out_width);
+  TensorSetShape((Tensor*)outputs->y_, 4, batch_size, channels,
+    out_height, out_width);
 
   // `mask` is used in the backpropagation
-  TensorSetShape((Tensor*)mask, 4, batch_size, channels,
+  TensorSetShape((Tensor*)outputs->mask_, 4, batch_size, channels,
     out_height, out_width);
 
   // Perform the 2D max-pooling for each batch
@@ -98,9 +123,9 @@ void MaxPool2dForward(const FloatTensor* x,
             }
           }
 
-          TensorAt4d(y, b, ch, oh, ow) = val;
-          TensorAt4d(mask, b, ch, oh, ow).idx_[0] = ih_max;
-          TensorAt4d(mask, b, ch, oh, ow).idx_[1] = iw_max;
+          TensorAt4d(outputs->y_, b, ch, oh, ow) = val;
+          TensorAt4d(outputs->mask_, b, ch, oh, ow).idx_[0] = ih_max;
+          TensorAt4d(outputs->mask_, b, ch, oh, ow).idx_[1] = iw_max;
         }
       }
     }
@@ -109,27 +134,26 @@ void MaxPool2dForward(const FloatTensor* x,
 
 // Backward operation for the 2D max-pooling
 // `dy` should be of size (B, C, Hout, Wout)
-// `mask` should be of size (B, C, Hout, Wout)
+// `outputs->mask_` should be of size (B, C, Hout, Wout)
 // `x` should be of size (B, C, Hin, Win)
-// The returned tensor `dx` is of size (B, C, Hin, Win)
+// The returned tensor `outputs->dx_` is of size (B, C, Hin, Win)
 void MaxPool2dBackward(const FloatTensor* dy,
-                       const Index2dTensor* mask,
                        const FloatTensor* x,
-                       FloatTensor* dx,
+                       MaxPool2dOutputs* outputs,
                        const MaxPool2dParams* params)
 {
   // The input and output tensors should not be NULL
   CheckTensor(dy);
-  CheckTensor(mask);
   CheckTensor(x);
-  CheckTensor(dx);
+  CheckTensor(outputs->mask_);
+  CheckTensor(outputs->dx_);
 
   // Check the dimensions of the input tensors
   CheckTensorDims(dy, 4);
-  CheckTensorDims(mask, 4);
+  CheckTensorDims(outputs->mask_, 4);
 
   // `dy` and `mask` should have the same shape
-  Assert(TensorIsShapeEqual((const Tensor*)dy, (const Tensor*)mask),
+  Assert(TensorIsShapeEqual((const Tensor*)dy, (const Tensor*)outputs->mask_),
          "Input tensors `dy` and `mask` should have the same shape");
 
   // Check the consistency of the tensor shapes
@@ -160,7 +184,7 @@ void MaxPool2dBackward(const FloatTensor* dy,
   const int in_width = x->base_.shape_[3];
 
   // Set the shape of the output tensor if necessary
-  TensorSetShapeLike((Tensor*)dx, (const Tensor*)x);
+  TensorSetShapeLike((Tensor*)outputs->dx_, (const Tensor*)x);
 
   // Perform the backpropagation for the 2D max-pooling
   // Compute the gradient for the input
@@ -188,8 +212,10 @@ void MaxPool2dBackward(const FloatTensor* dy,
             for (int ow = ow_min; ow < ow_max; ++ow) {
               // The output element (`b`, `ch`, `oh`, `ow`) in `y` is obtained
               // from the input element (`b`, `ch`, `idx_h`, `idx_w`) in `x`
-              const int idx_h = TensorAt4d(mask, b, ch, oh, ow).idx_[0];
-              const int idx_w = TensorAt4d(mask, b, ch, oh, ow).idx_[1];
+              const int idx_h = TensorAt4d(
+                outputs->mask_, b, ch, oh, ow).idx_[0];
+              const int idx_w = TensorAt4d(
+                outputs->mask_, b, ch, oh, ow).idx_[1];
 
               if (idx_h != ih || idx_w != iw)
                 continue;
@@ -201,7 +227,7 @@ void MaxPool2dBackward(const FloatTensor* dy,
             }
           }
 
-          TensorAt4d(dx, b, ch, ih, iw) = val;
+          TensorAt4d(outputs->dx_, b, ch, ih, iw) = val;
         }
       }
     }

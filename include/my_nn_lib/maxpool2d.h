@@ -23,6 +23,17 @@ typedef struct
   int padding_;
 } MaxPool2dParams;
 
+// Outputs for the 2D max-pooling layer
+typedef struct
+{
+  // Output of size (B, C, Hout, Wout)
+  FloatTensor*   y_;
+  // Output mask of size (B, C, Hout, Wout)
+  Index2dTensor* mask_;
+  // Gradient for the input of size (B, C, Hin, Win) (used for training)
+  FloatTensor*   dx_;
+} MaxPool2dOutputs;
+
 // Initialize the parameters for the 2D max-pooling layer
 void MaxPool2dParamsInitialize(MaxPool2dParams* params,
                                const int kernel_height,
@@ -33,24 +44,29 @@ void MaxPool2dParamsInitialize(MaxPool2dParams* params,
 // Free the parameters for the 2D max-pooling layer
 void MaxPool2dParamsFree(MaxPool2dParams* params);
 
+// Initialize the outputs for the 2D max-pooling layer
+void MaxPool2dOutputsInitialize(MaxPool2dOutputs* outputs,
+                                const bool inference_only);
+
+// Free the outputs for the 2D max-pooling layer
+void MaxPool2dOutputsFree(MaxPool2dOutputs* outputs);
+
 // Forward operation for the 2D max-pooling
 // `x` should be of size (B, C, Hin, Win)
-// The returned tensor `y` is of size (B, C, Hout, Wout)
-// The returned tensor `mask` is of size (B, C, Hout, Wout)
+// The returned tensor `outputs->y_` is of size (B, C, Hout, Wout)
+// The returned tensor `outputs->mask_` is of size (B, C, Hout, Wout)
 void MaxPool2dForward(const FloatTensor* x,
-                      FloatTensor* y,
-                      Index2dTensor* mask,
+                      MaxPool2dOutputs* outputs,
                       const MaxPool2dParams* params);
 
 // Backward operation for the 2D max-pooling
 // `dy` should be of size (B, C, Hout, Wout)
-// `mask` should be of size (B, C, Hout, Wout)
+// `outputs->mask_` should be of size (B, C, Hout, Wout)
 // `x` should be of size (B, C, Hin, Win)
-// The returned tensor `dx` is of size (B, C, Hin, Win)
+// The returned tensor `outputs->dx_` is of size (B, C, Hin, Win)
 void MaxPool2dBackward(const FloatTensor* dy,
-                       const Index2dTensor* mask,
                        const FloatTensor* x,
-                       FloatTensor* dx,
+                       MaxPool2dOutputs* outputs,
                        const MaxPool2dParams* params);
 
 #ifdef __cplusplus
