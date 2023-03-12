@@ -16,7 +16,8 @@
 void BatchNorm2dParamsInitialize(BatchNorm2dParams* params,
                                  const int dims,
                                  const float eps,
-                                 const float momentum)
+                                 const float momentum,
+                                 const bool inference_only)
 {
   Assert(params != NULL, "`params` should not be NULL");
   Assert(dims > 0, "`dims` should be greater than 0");
@@ -34,6 +35,16 @@ void BatchNorm2dParamsInitialize(BatchNorm2dParams* params,
     TENSOR_TYPE_FLOAT, dims);
   params->eps_ = eps;
   params->momentum_ = momentum;
+
+  if (!inference_only) {
+    params->dweight_ = (FloatTensor*)TensorEmpty1d(
+      TENSOR_TYPE_FLOAT, dims);
+    params->dbias_ = (FloatTensor*)TensorEmpty1d(
+      TENSOR_TYPE_FLOAT, dims);
+  } else {
+    params->dweight_ = NULL;
+    params->dbias_ = NULL;
+  }
 }
 
 // Free the parameters for the 2d batch normalization layer
@@ -47,6 +58,9 @@ void BatchNorm2dParamsFree(BatchNorm2dParams* params)
   TensorFree((Tensor**)&params->running_var_);
   params->eps_ = 0.0f;
   params->momentum_ = 0.0f;
+
+  TensorFree((Tensor**)&params->dweight_);
+  TensorFree((Tensor**)&params->dbias_);
 }
 
 // Initialize the outputs for the 2d batch normalization layer
@@ -294,8 +308,8 @@ void BatchNorm2dForward(const FloatTensor* x,
 // `outputs->xc_` should be of size (B, C, H, W)
 // `outputs->xn_` should be of size (B, C, H, W)
 // The returned tensor `outputs->dx_` is of size (B, C, H, W)
-// The returned tensor `dparams->weight_` is of size (C)
-// The returned tensor `dparams->bias_` is of size (C)
+// The returned tensor `params->dweight_` is of size (C)
+// The returned tensor `params->dbias_` is of size (C)
 // `params->weight_` should be of size (C)
 // `params->bias_` should be of size (C)
 // `params->running_mean_` should be of size (C)
@@ -303,8 +317,7 @@ void BatchNorm2dForward(const FloatTensor* x,
 void BatchNorm2dBackward(const FloatTensor* dy,
                          const FloatTensor* x,
                          BatchNorm2dOutputs* outputs,
-                         BatchNorm2dParams* dparams,
-                         const BatchNorm2dParams* params)
+                         BatchNorm2dParams* params)
 {
   // The input and output tensors should not be NULL
   CheckTensor(dy);
@@ -320,6 +333,9 @@ void BatchNorm2dBackward(const FloatTensor* dy,
   CheckTensor(outputs->dstd_);
   CheckTensor(outputs->dxc_);
   CheckTensor(outputs->dxn_);
+  CheckTensor(params->weight_);
+  CheckTensor(params->dweight_);
+  CheckTensor(params->dbias_);
 
   // Check the dimensions of the input tensors
   CheckTensorDims(dy, 4);
@@ -364,8 +380,8 @@ void BatchNorm2dBackward(const FloatTensor* dy,
   TensorSetShape((Tensor*)outputs->dmean_, 1, channels);
   TensorSetShape((Tensor*)outputs->dvar_, 1, channels);
   TensorSetShape((Tensor*)outputs->dstd_, 1, channels);
-  TensorSetShape((Tensor*)dparams->weight_, 1, channels);
-  TensorSetShape((Tensor*)dparams->bias_, 1, channels);
+  TensorSetShape((Tensor*)params->dweight_, 1, channels);
+  TensorSetShape((Tensor*)params->dbias_, 1, channels);
 
   // Perform the backpropagation for the 2d batch normalization
   // Compute the gradient for the weight
@@ -381,7 +397,7 @@ void BatchNorm2dBackward(const FloatTensor* dy,
       }
     }
 
-    TensorAt1d(dparams->weight_, ch) = val;
+    TensorAt1d(params->dweight_, ch) = val;
   }
 
   // Compute the gradient for the bias
@@ -396,7 +412,7 @@ void BatchNorm2dBackward(const FloatTensor* dy,
       }
     }
 
-    TensorAt1d(dparams->bias_, ch) = val;
+    TensorAt1d(params->dbias_, ch) = val;
   }
 
   // Compute the gradient for the normalized input `xn`

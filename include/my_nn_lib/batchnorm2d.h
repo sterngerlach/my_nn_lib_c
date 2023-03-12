@@ -27,6 +27,11 @@ typedef struct
   float        eps_;
   // Momentum (to keep track the mean and variance)
   float        momentum_;
+
+  // Gradient for the weight parameters of size (C) (used for training)
+  FloatTensor* dweight_;
+  // Gradient for the bias parameters of size (C) (used for training)
+  FloatTensor* dbias_;
 } BatchNorm2dParams;
 
 // Outputs and intermediate results for the 2d batch normalization layer
@@ -68,7 +73,8 @@ typedef struct
 void BatchNorm2dParamsInitialize(BatchNorm2dParams* params,
                                  const int dims,
                                  const float eps,
-                                 const float momentum);
+                                 const float momentum,
+                                 const bool inference_only);
 
 // Free the parameters for the 2d batch normalization layer
 void BatchNorm2dParamsFree(BatchNorm2dParams* params);
@@ -106,8 +112,8 @@ void BatchNorm2dForward(const FloatTensor* x,
 // `outputs->xc_` should be of size (B, C, H, W)
 // `outputs->xn_` should be of size (B, C, H, W)
 // The returned tensor `outputs->dx_` is of size (B, C, H, W)
-// The returned tensor `dparams->weight_` is of size (C)
-// The returned tensor `dparams->bias_` is of size (C)
+// The returned tensor `params->dweight_` is of size (C)
+// The returned tensor `params->dbias_` is of size (C)
 // `params->weight_` should be of size (C)
 // `params->bias_` should be of size (C)
 // `params->running_mean_` should be of size (C)
@@ -115,8 +121,7 @@ void BatchNorm2dForward(const FloatTensor* x,
 void BatchNorm2dBackward(const FloatTensor* dy,
                          const FloatTensor* x,
                          BatchNorm2dOutputs* outputs,
-                         BatchNorm2dParams* dparams,
-                         const BatchNorm2dParams* params);
+                         BatchNorm2dParams* params);
 
 #ifdef __cplusplus
 }
