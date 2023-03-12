@@ -205,6 +205,22 @@ static Tensor* TensorEmptyNdCore(const enum TensorDataType dtype,
   return tensor;
 }
 
+// Create a new ND tensor
+// Tensor data is filled with ones
+static Tensor* TensorOnesNdCore(const enum TensorDataType dtype,
+                                const int ndim,
+                                va_list args)
+{
+  // Create an empty tensor
+  Tensor* tensor = TensorEmptyNdCore(dtype, false, ndim, args);
+  Assert(tensor != NULL, "Failed to create a new empty tensor");
+
+  // Fill with ones
+  TensorFillWithOnes(tensor);
+
+  return tensor;
+}
+
 // Create a new ND tensor with the same shape
 static Tensor* TensorEmptyLikeCore(const bool fill_with_zeros,
                                    const Tensor* src)
@@ -231,6 +247,20 @@ static Tensor* TensorEmptyLikeCore(const bool fill_with_zeros,
 
   // Call `TensorSetData` after `tensor->dtype_` is set
   TensorSetData(tensor, data);
+
+  return tensor;
+}
+
+// Create a new ND tensor with the same shape
+// Tensor data is filled with ones
+static Tensor* TensorOnesLikeCore(const Tensor* src)
+{
+  // Create an empty tensor
+  Tensor* tensor = TensorEmptyLikeCore(false, src);
+  Assert(tensor != NULL, "Failed to create a new empty tensor");
+
+  // Fill with ones
+  TensorFillWithOnes(tensor);
 
   return tensor;
 }
@@ -357,6 +387,21 @@ Tensor* TensorZerosNd(const enum TensorDataType dtype,
   return tensor;
 }
 
+// Create a new ND tensor
+// Tensor data is filled with ones
+Tensor* TensorOnesNd(const enum TensorDataType dtype,
+                     const int ndim, ...)
+{
+  Tensor* tensor = NULL;
+
+  va_list args;
+  va_start(args, ndim);
+  tensor = TensorOnesNdCore(dtype, ndim, args);
+  va_end(args);
+
+  return tensor;
+}
+
 // Create a new ND tensor with the same shape
 // Tensor data is not initialized
 Tensor* TensorEmptyLike(const Tensor* src)
@@ -369,6 +414,13 @@ Tensor* TensorEmptyLike(const Tensor* src)
 Tensor* TensorZerosLike(const Tensor* src)
 {
   return TensorEmptyLikeCore(true, src);
+}
+
+// Create a new ND tensor with the same shape
+// Tensor data is filled with ones
+Tensor* TensorOnesLike(const Tensor* src)
+{
+  return TensorOnesLikeCore(src);
 }
 
 // Set the shape of the tensor

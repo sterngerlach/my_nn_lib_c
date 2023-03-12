@@ -95,6 +95,11 @@ Tensor* TensorEmptyNd(const enum TensorDataType dtype,
 Tensor* TensorZerosNd(const enum TensorDataType dtype,
                       const int ndim, ...);
 
+// Create a new ND tensor
+// Tensor data is filled with ones
+Tensor* TensorOnesNd(const enum TensorDataType dtype,
+                     const int ndim, ...);
+
 // Create a new ND tensor with the same shape
 // Tensor data is not initialized
 Tensor* TensorEmptyLike(const Tensor* src);
@@ -102,6 +107,10 @@ Tensor* TensorEmptyLike(const Tensor* src);
 // Create a new ND tensor with the same shape
 // Tensor data is filled with zeros
 Tensor* TensorZerosLike(const Tensor* src);
+
+// Create a new ND tensor with the same shape
+// Tensor data is filled with ones
+Tensor* TensorOnesLike(const Tensor* src);
 
 // Set the shape of the tensor
 // The expanded part is not initialized
@@ -168,6 +177,19 @@ bool TensorIsShapeEqualNd(const Tensor* tensor,
 // Create a new 4D tensor with zeros
 #define TensorZeros4d(dtype, d0, d1, d2, d3) \
   TensorZerosNd((dtype), 4, (d0), (d1), (d2), (d3))
+
+// Create a new 1D tensor with ones
+#define TensorOnes1d(dtype, d0) \
+  TensorOnesNd((dtype), 1, (d0))
+// Create a new 2D tensor with ones
+#define TensorOnes2d(dtype, d0, d1) \
+  TensorOnesNd((dtype), 2, (d0), (d1))
+// Create a new 3D tensor with ones
+#define TensorOnes3d(dtype, d0, d1, d2) \
+  TensorOnesNd((dtype), 3, (d0), (d1), (d2))
+// Create a new 4D tensor with ones
+#define TensorOnes4d(dtype, d0, d1, d2, d3) \
+  TensorOnesNd((dtype), 4, (d0), (d1), (d2), (d3))
 
 #ifdef __cplusplus
 }
