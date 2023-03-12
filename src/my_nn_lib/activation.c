@@ -10,11 +10,53 @@
 
 #include <math.h>
 
+// Initialize the outputs for the Softmax activation
+void ActivationOutputsInitialize(ActivationOutputs* outputs,
+                                 const bool inference_only)
+{
+  Assert(outputs != NULL, "`outputs` should not be NULL");
+
+  outputs->y_ = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
+
+  if (!inference_only)
+    outputs->dx_ = (FloatTensor*)TensorAllocate(TENSOR_TYPE_FLOAT);
+  else
+    outputs->dx_ = NULL;
+}
+
+// Free the outputs for the Softmax activation
+void ActivationOutputsFree(ActivationOutputs* outputs)
+{
+  Assert(outputs != NULL, "`outputs` should not be NULL");
+
+  TensorFree((Tensor**)&outputs->y_);
+  TensorFree((Tensor**)&outputs->dx_);
+}
+
+// Forward operation for the Softmax activation
+// `x` should be of size (B, D)
+// The returned tensor `outputs->y_` is of size (B, D)
+void SoftmaxForward(const FloatTensor* x,
+                    ActivationOutputs* outputs)
+{
+  SoftmaxForwardF(x, outputs->y_);
+}
+
+// Backward operation for the Softmax activation
+// `dy` should be of size (B, D)
+// `outputs->y_` should be of size (B, D)
+// The returned tensor `outputs->dx_` is of size (B, D)
+void SoftmaxBackward(const FloatTensor* dy,
+                     ActivationOutputs* outputs)
+{
+  SoftmaxBackwardF(dy, outputs->y_, outputs->dx_);
+}
+
 // Forward operation for the Softmax activation
 // `x` should be of size (B, D)
 // The returned tensor `y` is of size (B, D)
-void SoftmaxForward(const FloatTensor* x,
-                    FloatTensor* y)
+void SoftmaxForwardF(const FloatTensor* x,
+                     FloatTensor* y)
 {
   // The input and output tensor should not be NULL
   CheckTensor(x);
@@ -58,9 +100,9 @@ void SoftmaxForward(const FloatTensor* x,
 // `dy` should be of size (B, D)
 // `y` should be of size (B, D)
 // The returned tensor `dx` is of size (B, D)
-void SoftmaxBackward(const FloatTensor* dy,
-                     const FloatTensor* y,
-                     FloatTensor* dx)
+void SoftmaxBackwardF(const FloatTensor* dy,
+                      const FloatTensor* y,
+                      FloatTensor* dx)
 {
   // The input and output tensors should not be NULL
   CheckTensor(dy);
@@ -98,9 +140,29 @@ void SoftmaxBackward(const FloatTensor* dy,
 
 // Forward operation for the ReLU activation
 // `x` should be of size (*)
-// The returned tensor `y` is of size (*)
+// The returned tensor `outputs->y_` is of size (*)
 void ReLUForward(const FloatTensor* x,
-                 FloatTensor* y)
+                 ActivationOutputs* outputs)
+{
+  ReLUForwardF(x, outputs->y_);
+}
+
+// Backward operation for the ReLU activation
+// `dy` should be of size (*)
+// `x` should be of size (*)
+// The returned tensor `outputs->dx_` is of size (*)
+void ReLUBackward(const FloatTensor* dy,
+                  const FloatTensor* x,
+                  ActivationOutputs* outputs)
+{
+  ReLUBackwardF(dy, x, outputs->dx_);
+}
+
+// Forward operation for the ReLU activation
+// `x` should be of size (*)
+// The returned tensor `y` is of size (*)
+void ReLUForwardF(const FloatTensor* x,
+                  FloatTensor* y)
 {
   // The input and output tensor should not be NULL
   CheckTensor(x);
@@ -118,9 +180,9 @@ void ReLUForward(const FloatTensor* x,
 // `dy` should be of size (*)
 // `x` should be of size (*)
 // The returned tensor `dx` is of size (*)
-void ReLUBackward(const FloatTensor* dy,
-                  const FloatTensor* x,
-                  FloatTensor* dx)
+void ReLUBackwardF(const FloatTensor* dy,
+                   const FloatTensor* x,
+                   FloatTensor* dx)
 {
   // The input and output tensors should not be NULL
   CheckTensor(dy);
@@ -141,9 +203,28 @@ void ReLUBackward(const FloatTensor* dy,
 
 // Forward operation for the Sigmoid activation
 // `x` should be of size (*)
-// The returned tensor `y` is of size (*)
+// The returned tensor `outputs->y_` is of size (*)
 void SigmoidForward(const FloatTensor* x,
-                    FloatTensor* y)
+                    ActivationOutputs* outputs)
+{
+  SigmoidForwardF(x, outputs->y_);
+}
+
+// Backward operation for the Sigmoid activation
+// `dy` should be of size (*)
+// `outputs->y_` should be of size (*)
+// The returned tensor `outputs->dx_` is of size (*)
+void SigmoidBackward(const FloatTensor* dy,
+                     ActivationOutputs* outputs)
+{
+  SigmoidBackwardF(dy, outputs->y_, outputs->dx_);
+}
+
+// Forward operation for the Sigmoid activation
+// `x` should be of size (*)
+// The returned tensor `y` is of size (*)
+void SigmoidForwardF(const FloatTensor* x,
+                     FloatTensor* y)
 {
   // The input and output tensor should not be NULL
   CheckTensor(x);
@@ -161,9 +242,9 @@ void SigmoidForward(const FloatTensor* x,
 // `dy` should be of size (*)
 // `y` should be of size (*)
 // The returned tensor `dx` is of size (*)
-void SigmoidBackward(const FloatTensor* dy,
-                     const FloatTensor* y,
-                     FloatTensor* dx)
+void SigmoidBackwardF(const FloatTensor* dy,
+                      const FloatTensor* y,
+                      FloatTensor* dx)
 {
   // The input and output tensors should not be NULL
   CheckTensor(dy);
