@@ -3,6 +3,7 @@
 
 target_sources(my_nn_lib PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/activation.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/batchnorm2d.c
   ${CMAKE_CURRENT_SOURCE_DIR}/conv2d.c
   ${CMAKE_CURRENT_SOURCE_DIR}/flatten.c
   ${CMAKE_CURRENT_SOURCE_DIR}/linear.c
