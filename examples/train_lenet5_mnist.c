@@ -6,6 +6,7 @@
 #include <stdlib.h>
 
 #include "my_nn_lib/activation.h"
+#include "my_nn_lib/batchnorm2d.h"
 #include "my_nn_lib/conv2d.h"
 #include "my_nn_lib/flatten.h"
 #include "my_nn_lib/linear.h"
@@ -22,21 +23,25 @@
 
 typedef struct
 {
-  Conv2dParams    conv0_;
-  MaxPool2dParams pool0_;
-  Conv2dParams    conv1_;
-  MaxPool2dParams pool1_;
-  LinearParams    linear0_;
-  LinearParams    linear1_;
-  LinearParams    linear2_;
+  Conv2dParams      conv0_;
+  BatchNorm2dParams bn0_;
+  MaxPool2dParams   pool0_;
+  Conv2dParams      conv1_;
+  BatchNorm2dParams bn1_;
+  MaxPool2dParams   pool1_;
+  LinearParams      linear0_;
+  LinearParams      linear1_;
+  LinearParams      linear2_;
 } LeNet5Params;
 
 typedef struct
 {
   Conv2dOutputs           conv0_;
+  BatchNorm2dOutputs      bn0_;
   ActivationOutputs       relu0_;
   MaxPool2dOutputs        pool0_;
   Conv2dOutputs           conv1_;
+  BatchNorm2dOutputs      bn1_;
   ActivationOutputs       relu1_;
   MaxPool2dOutputs        pool1_;
   FlattenOutputs          flatten0_;
@@ -52,9 +57,11 @@ typedef struct
 void LeNet5ParamsInitialize(LeNet5Params* params)
 {
   Conv2dParamsInitialize(&params->conv0_, 1, 6, 5, 5, 1, 2, false);
+  BatchNorm2dParamsInitialize(&params->bn0_, 6, 1.0e-5f, 0.1f, false);
   MaxPool2dParamsInitialize(&params->pool0_, 2, 2, 2, 0);
 
   Conv2dParamsInitialize(&params->conv1_, 6, 16, 5, 5, 1, 0, false);
+  BatchNorm2dParamsInitialize(&params->bn1_, 16, 1.0e-5f, 0.1f, false);
   MaxPool2dParamsInitialize(&params->pool1_, 2, 2, 2, 0);
 
   LinearParamsInitialize(&params->linear0_, 400, 120, false);
@@ -76,9 +83,11 @@ void LeNet5ParamsInitialize(LeNet5Params* params)
 void LeNet5ParamsDestroy(LeNet5Params* params)
 {
   Conv2dParamsFree(&params->conv0_);
+  BatchNorm2dParamsFree(&params->bn0_);
   MaxPool2dParamsFree(&params->pool0_);
 
   Conv2dParamsFree(&params->conv1_);
+  BatchNorm2dParamsFree(&params->bn1_);
   MaxPool2dParamsFree(&params->pool1_);
 
   LinearParamsFree(&params->linear0_);
@@ -89,9 +98,11 @@ void LeNet5ParamsDestroy(LeNet5Params* params)
 void LayerOutputsInitialize(LayerOutputs* outputs)
 {
   Conv2dOutputsInitialize(&outputs->conv0_, false);
+  BatchNorm2dOutputsInitialize(&outputs->bn0_, false);
   ActivationOutputsInitialize(&outputs->relu0_, false);
   MaxPool2dOutputsInitialize(&outputs->pool0_, false);
   Conv2dOutputsInitialize(&outputs->conv1_, false);
+  BatchNorm2dOutputsInitialize(&outputs->bn1_, false);
   ActivationOutputsInitialize(&outputs->relu1_, false);
   MaxPool2dOutputsInitialize(&outputs->pool1_, false);
   FlattenOutputsInitialize(&outputs->flatten0_, false);
@@ -109,9 +120,11 @@ void LayerOutputsInitialize(LayerOutputs* outputs)
 void LayerOutputsDestroy(LayerOutputs* outputs)
 {
   Conv2dOutputsFree(&outputs->conv0_);
+  BatchNorm2dOutputsFree(&outputs->bn0_);
   ActivationOutputsFree(&outputs->relu0_);
   MaxPool2dOutputsFree(&outputs->pool0_);
   Conv2dOutputsFree(&outputs->conv1_);
+  BatchNorm2dOutputsFree(&outputs->bn1_);
   ActivationOutputsFree(&outputs->relu1_);
   MaxPool2dOutputsFree(&outputs->pool1_);
   FlattenOutputsFree(&outputs->flatten0_);
@@ -138,9 +151,17 @@ void OptimizerInitialize(TensorListEntry* optim_params,
   TensorListAppend(optim_params,
     (Tensor*)params->conv0_.bias_, "conv0_bias");
   TensorListAppend(optim_params,
+    (Tensor*)params->bn0_.weight_, "bn0_weight");
+  TensorListAppend(optim_params,
+    (Tensor*)params->bn0_.bias_, "bn0_bias");
+  TensorListAppend(optim_params,
     (Tensor*)params->conv1_.weight_, "conv1_weight");
   TensorListAppend(optim_params,
     (Tensor*)params->conv1_.bias_, "conv1_bias");
+  TensorListAppend(optim_params,
+    (Tensor*)params->bn1_.weight_, "bn1_weight");
+  TensorListAppend(optim_params,
+    (Tensor*)params->bn1_.bias_, "bn1_bias");
   TensorListAppend(optim_params,
     (Tensor*)params->linear0_.weight_, "linear0_weight");
   TensorListAppend(optim_params,
@@ -159,9 +180,17 @@ void OptimizerInitialize(TensorListEntry* optim_params,
   TensorListAppend(optim_gradients,
     (Tensor*)params->conv0_.dbias_, "conv0_bias");
   TensorListAppend(optim_gradients,
+    (Tensor*)params->bn0_.dweight_, "bn0_weight");
+  TensorListAppend(optim_gradients,
+    (Tensor*)params->bn0_.dbias_, "bn0_bias");
+  TensorListAppend(optim_gradients,
     (Tensor*)params->conv1_.dweight_, "conv1_weight");
   TensorListAppend(optim_gradients,
     (Tensor*)params->conv1_.dbias_, "conv1_bias");
+  TensorListAppend(optim_gradients,
+    (Tensor*)params->bn1_.dweight_, "bn1_weight");
+  TensorListAppend(optim_gradients,
+    (Tensor*)params->bn1_.dbias_, "bn1_bias");
   TensorListAppend(optim_gradients,
     (Tensor*)params->linear0_.dweight_, "linear0_weight");
   TensorListAppend(optim_gradients,
@@ -185,20 +214,25 @@ void OptimizerDestroy(TensorListEntry* optim_params,
 
 void LeNet5Forward(const FloatTensor* x,
                    const IntTensor* target,
-                   const LeNet5Params* params,
-                   LayerOutputs* outputs)
+                   LeNet5Params* params,
+                   LayerOutputs* outputs,
+                   const bool training)
 {
   // `x` is of size (B, 1, 28, 28)
   // `outputs->conv0_.y_` and `outputs->relu0_.y_` are of size (B, 6, 28, 28)
   Conv2dForward(x, &outputs->conv0_, &params->conv0_);
-  ReLUForward(outputs->conv0_.y_, &outputs->relu0_);
+  BatchNorm2dForward(outputs->conv0_.y_,
+                     &outputs->bn0_, &params->bn0_, training);
+  ReLUForward(outputs->bn0_.y_, &outputs->relu0_);
 
   // `outputs->pool0_.y_` is of size (B, 6, 14, 14)
   MaxPool2dForward(outputs->relu0_.y_, &outputs->pool0_, &params->pool0_);
 
   // `outputs->conv1_.y_` and `outputs->relu1_.y_` are of size (B, 16, 10, 10)
   Conv2dForward(outputs->pool0_.y_, &outputs->conv1_, &params->conv1_);
-  ReLUForward(outputs->conv1_.y_, &outputs->relu1_);
+  BatchNorm2dForward(outputs->conv1_.y_,
+                     &outputs->bn1_, &params->bn1_, training);
+  ReLUForward(outputs->bn1_.y_, &outputs->relu1_);
 
   // `outputs->pool1_.y_` is of size (B, 16, 5, 5)
   MaxPool2dForward(outputs->relu1_.y_, &outputs->pool1_, &params->pool1_);
@@ -247,15 +281,19 @@ void LeNet5Backward(const FloatTensor* x,
   MaxPool2dBackward(outputs->flatten0_.dx_, outputs->relu1_.y_,
                     &outputs->pool1_, &params->pool1_);
 
-  ReLUBackward(outputs->pool1_.dx_, outputs->conv1_.y_, &outputs->relu1_);
-  Conv2dBackward(outputs->relu1_.dx_, outputs->pool0_.y_,
+  ReLUBackward(outputs->pool1_.dx_, outputs->bn1_.y_, &outputs->relu1_);
+  BatchNorm2dBackward(outputs->relu1_.dx_, outputs->conv1_.y_,
+                      &outputs->bn1_, &params->bn1_);
+  Conv2dBackward(outputs->bn1_.dx_, outputs->pool0_.y_,
                  &outputs->conv1_, &params->conv1_);
 
   MaxPool2dBackward(outputs->conv1_.dx_, outputs->relu0_.y_,
                     &outputs->pool0_, &params->pool0_);
 
-  ReLUBackward(outputs->pool0_.dx_, outputs->conv0_.y_, &outputs->relu0_);
-  Conv2dBackward(outputs->relu0_.dx_, x,
+  ReLUBackward(outputs->pool0_.dx_, outputs->bn0_.y_, &outputs->relu0_);
+  BatchNorm2dBackward(outputs->relu0_.dx_, outputs->conv0_.y_,
+                      &outputs->bn0_, &params->bn0_);
+  Conv2dBackward(outputs->bn0_.dx_, x,
                  &outputs->conv0_, &params->conv0_);
 }
 
@@ -370,7 +408,7 @@ void TrainEpoch(const int epoch,
     }
 
     // Perform the forward operation
-    LeNet5Forward(x, target, model_params, layer_outputs);
+    LeNet5Forward(x, target, model_params, layer_outputs, true);
 
     // Perform the backward operation
     LeNet5Backward(x, target, model_params, layer_outputs);
@@ -455,7 +493,7 @@ void TestEpoch(const int epoch,
     }
 
     // Perform the forward operation
-    LeNet5Forward(x, target, model_params, layer_outputs);
+    LeNet5Forward(x, target, model_params, layer_outputs, false);
 
     // Compute the loss
     if (b == 0)
