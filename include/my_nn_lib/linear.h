@@ -17,6 +17,11 @@ typedef struct
   FloatTensor* weight_;
   // Bias parameters of size (Dout)
   FloatTensor* bias_;
+
+  // Gradient for the weight parameters of size (Dout, Din)
+  FloatTensor* dweight_;
+  // Gradient for the bias parameters of size (Dout)
+  FloatTensor* dbias_;
 } LinearParams;
 
 // Outputs for the fully-connected layer
@@ -31,7 +36,8 @@ typedef struct
 // Initialize the parameters for the fully-connected layer
 void LinearParamsInitialize(LinearParams* params,
                             const int in_dims,
-                            const int out_dims);
+                            const int out_dims,
+                            const bool inference_only);
 
 // Free the parameters for the fully-connected layer
 void LinearParamsFree(LinearParams* params);
@@ -57,16 +63,15 @@ void LinearForward(const FloatTensor* x,
 // `dy` should be of size (B, Dout)
 // `x` should be of size (B, Din)
 // The returned tensor `outputs->dx_` is of size (B, Din)
-// The returned tensor `dparams->weight_` is of size (Dout, Din)
-// The returned tensor `dparams->bias_` is of size (Dout)
+// The returned tensor `params->dweight_` is of size (Dout, Din)
+// The returned tensor `params->dbias_` is of size (Dout)
 // `params->weight_` should be of size (Dout, Din)
 // `params->bias_` should be of size (Dout)
 // `params->bias_` may be `NULL`
 void LinearBackward(const FloatTensor* dy,
                     const FloatTensor* x,
                     LinearOutputs* outputs,
-                    LinearParams* dparams,
-                    const LinearParams* params);
+                    LinearParams* params);
 
 #ifdef __cplusplus
 }

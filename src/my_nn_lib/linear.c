@@ -9,7 +9,8 @@
 // Initialize the parameters for the fully-connected layer
 void LinearParamsInitialize(LinearParams* params,
                             const int in_dims,
-                            const int out_dims)
+                            const int out_dims,
+                            const bool inference_only)
 {
   Assert(params != NULL, "`params` should not be NULL");
   Assert(in_dims > 0, "`in_dims` should be greater than 0");
@@ -19,6 +20,16 @@ void LinearParamsInitialize(LinearParams* params,
     TENSOR_TYPE_FLOAT, out_dims, in_dims);
   params->bias_ = (FloatTensor*)TensorEmpty1d(
     TENSOR_TYPE_FLOAT, out_dims);
+
+  if (!inference_only) {
+    params->dweight_ = (FloatTensor*)TensorEmpty2d(
+      TENSOR_TYPE_FLOAT, out_dims, in_dims);
+    params->dbias_ = (FloatTensor*)TensorEmpty1d(
+      TENSOR_TYPE_FLOAT, out_dims);
+  } else {
+    params->dweight_ = NULL;
+    params->dbias_ = NULL;
+  }
 }
 
 // Free the parameters for the fully-connected layer
@@ -28,6 +39,9 @@ void LinearParamsFree(LinearParams* params)
 
   TensorFree((Tensor**)&params->weight_);
   TensorFree((Tensor**)&params->bias_);
+
+  TensorFree((Tensor**)&params->dweight_);
+  TensorFree((Tensor**)&params->dbias_);
 }
 
 // Initialize the outputs for the fully-connected layer
@@ -115,22 +129,21 @@ void LinearForward(const FloatTensor* x,
 // `dy` should be of size (B, Dout)
 // `x` should be of size (B, Din)
 // The returned tensor `outputs->dx_` is of size (B, Din)
-// The returned tensor `dparams->weight_` is of size (Dout, Din)
-// The returned tensor `dparams->bias_` is of size (Dout)
+// The returned tensor `params->dweight_` is of size (Dout, Din)
+// The returned tensor `params->dbias_` is of size (Dout)
 // `params->weight_` should be of size (Dout, Din)
 // `params->bias_` should be of size (Dout)
 // `params->bias_` may be `NULL`
 void LinearBackward(const FloatTensor* dy,
                     const FloatTensor* x,
                     LinearOutputs* outputs,
-                    LinearParams* dparams,
-                    const LinearParams* params)
+                    LinearParams* params)
 {
   // The input and output tensors should not be NULL except `dbias` and `bias`
   CheckTensor(dy);
   CheckTensor(x);
   CheckTensor(outputs->dx_);
-  CheckTensor(dparams->weight_);
+  CheckTensor(params->dweight_);
   CheckTensor(params->weight_);
 
   // Check the dimensions of the input tensors
@@ -169,10 +182,12 @@ void LinearBackward(const FloatTensor* dy,
 
   // Set the shape of the output tensor if necessary
   TensorSetShapeLike((Tensor*)outputs->dx_, (const Tensor*)x);
-  TensorSetShapeLike((Tensor*)dparams->weight_, (const Tensor*)params->weight_);
+  TensorSetShapeLike((Tensor*)params->dweight_, (const Tensor*)params->weight_);
 
-  if (params->bias_ != NULL)
-    TensorSetShapeLike((Tensor*)dparams->bias_, (const Tensor*)params->bias_);
+  if (params->bias_ != NULL) {
+    CheckTensor(params->dbias_);
+    TensorSetShapeLike((Tensor*)params->dbias_, (const Tensor*)params->bias_);
+  }
 
   // Perform the backpropagation for the fully-connected layer
   // Compute the gradient for the weight
@@ -184,19 +199,21 @@ void LinearBackward(const FloatTensor* dy,
         val += TensorAt2d(x, b, j) * TensorAt2d(dy, b, i);
       }
 
-      TensorAt2d(dparams->weight_, i, j) = val;
+      TensorAt2d(params->dweight_, i, j) = val;
     }
   }
 
   // Compute the gradient for the bias
-  for (int i = 0; i < out_dims; ++i) {
-    float val = 0;
+  if (params->bias_ != NULL) {
+    for (int i = 0; i < out_dims; ++i) {
+      float val = 0;
 
-    for (int b = 0; b < batch_size; ++b) {
-      val += TensorAt2d(dy, b, i);
+      for (int b = 0; b < batch_size; ++b) {
+        val += TensorAt2d(dy, b, i);
+      }
+
+      TensorAt1d(params->dbias_, i) = val;
     }
-
-    TensorAt1d(dparams->bias_, i) = val;
   }
 
   // Compute the gradient for the input
