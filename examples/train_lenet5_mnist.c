@@ -51,15 +51,15 @@ typedef struct
 
 void LeNet5ParamsInitialize(LeNet5Params* params)
 {
-  Conv2dParamsInitialize(&params->conv0_, 1, 6, 5, 5, 1, 2);
+  Conv2dParamsInitialize(&params->conv0_, 1, 6, 5, 5, 1, 2, false);
   MaxPool2dParamsInitialize(&params->pool0_, 2, 2, 2, 0);
 
-  Conv2dParamsInitialize(&params->conv1_, 6, 16, 5, 5, 1, 0);
+  Conv2dParamsInitialize(&params->conv1_, 6, 16, 5, 5, 1, 0, false);
   MaxPool2dParamsInitialize(&params->pool1_, 2, 2, 2, 0);
 
-  LinearParamsInitialize(&params->linear0_, 400, 120);
-  LinearParamsInitialize(&params->linear1_, 120, 84);
-  LinearParamsInitialize(&params->linear2_, 84, 10);
+  LinearParamsInitialize(&params->linear0_, 400, 120, false);
+  LinearParamsInitialize(&params->linear1_, 120, 84, false);
+  LinearParamsInitialize(&params->linear2_, 84, 10, false);
 
   FloatTensorRandomUniform(params->conv0_.weight_, -0.1f, 0.1f);
   FloatTensorRandomUniform(params->conv0_.bias_, -0.1f, 0.1f);
@@ -128,8 +128,7 @@ void LayerOutputsDestroy(LayerOutputs* outputs)
 
 void OptimizerInitialize(TensorListEntry* optim_params,
                          TensorListEntry* optim_gradients,
-                         LeNet5Params* params,
-                         LeNet5Params* gradients)
+                         LeNet5Params* params)
 {
   TensorListInitialize(optim_params);
   TensorListInitialize(optim_gradients);
@@ -156,25 +155,25 @@ void OptimizerInitialize(TensorListEntry* optim_params,
     (Tensor*)params->linear2_.bias_, "linear2_bias");
 
   TensorListAppend(optim_gradients,
-    (Tensor*)gradients->conv0_.weight_, "conv0_weight");
+    (Tensor*)params->conv0_.dweight_, "conv0_weight");
   TensorListAppend(optim_gradients,
-    (Tensor*)gradients->conv0_.bias_, "conv0_bias");
+    (Tensor*)params->conv0_.dbias_, "conv0_bias");
   TensorListAppend(optim_gradients,
-    (Tensor*)gradients->conv1_.weight_, "conv1_weight");
+    (Tensor*)params->conv1_.dweight_, "conv1_weight");
   TensorListAppend(optim_gradients,
-    (Tensor*)gradients->conv1_.bias_, "conv1_bias");
+    (Tensor*)params->conv1_.dbias_, "conv1_bias");
   TensorListAppend(optim_gradients,
-    (Tensor*)gradients->linear0_.weight_, "linear0_weight");
+    (Tensor*)params->linear0_.dweight_, "linear0_weight");
   TensorListAppend(optim_gradients,
-    (Tensor*)gradients->linear0_.bias_, "linear0_bias");
+    (Tensor*)params->linear0_.dbias_, "linear0_bias");
   TensorListAppend(optim_gradients,
-    (Tensor*)gradients->linear1_.weight_, "linear1_weight");
+    (Tensor*)params->linear1_.dweight_, "linear1_weight");
   TensorListAppend(optim_gradients,
-    (Tensor*)gradients->linear1_.bias_, "linear1_bias");
+    (Tensor*)params->linear1_.dbias_, "linear1_bias");
   TensorListAppend(optim_gradients,
-    (Tensor*)gradients->linear2_.weight_, "linear2_weight");
+    (Tensor*)params->linear2_.dweight_, "linear2_weight");
   TensorListAppend(optim_gradients,
-    (Tensor*)gradients->linear2_.bias_, "linear2_bias");
+    (Tensor*)params->linear2_.dbias_, "linear2_bias");
 }
 
 void OptimizerDestroy(TensorListEntry* optim_params,
@@ -223,25 +222,24 @@ void LeNet5Forward(const FloatTensor* x,
   CrossEntropyLossForward(outputs->relu4_.y_, target, &outputs->loss_);
 }
 
-void LeNet5Backward(const LeNet5Params* params,
-                    const FloatTensor* x,
+void LeNet5Backward(const FloatTensor* x,
                     const IntTensor* target,
-                    LayerOutputs* outputs,
-                    LeNet5Params* grad_params)
+                    LeNet5Params* params,
+                    LayerOutputs* outputs)
 {
   CrossEntropyLossBackward(target, &outputs->loss_);
 
   ReLUBackward(outputs->loss_.dx_, outputs->linear2_.y_, &outputs->relu4_);
-  LinearBackward(outputs->relu4_.dx_, outputs->relu3_.y_, &outputs->linear2_,
-                 &grad_params->linear2_, &params->linear2_);
+  LinearBackward(outputs->relu4_.dx_, outputs->relu3_.y_,
+                 &outputs->linear2_, &params->linear2_);
 
   ReLUBackward(outputs->linear2_.dx_, outputs->linear1_.y_, &outputs->relu3_);
-  LinearBackward(outputs->relu3_.dx_, outputs->relu2_.y_, &outputs->linear1_,
-                 &grad_params->linear1_, &params->linear1_);
+  LinearBackward(outputs->relu3_.dx_, outputs->relu2_.y_,
+                 &outputs->linear1_, &params->linear1_);
 
   ReLUBackward(outputs->linear1_.dx_, outputs->linear0_.y_, &outputs->relu2_);
-  LinearBackward(outputs->relu2_.dx_, outputs->flatten0_.y_, &outputs->linear0_,
-                 &grad_params->linear0_, &params->linear0_);
+  LinearBackward(outputs->relu2_.dx_, outputs->flatten0_.y_,
+                 &outputs->linear0_, &params->linear0_);
 
   FlattenBackward(outputs->linear0_.dx_, outputs->pool1_.y_,
                   &outputs->flatten0_);
@@ -250,15 +248,15 @@ void LeNet5Backward(const LeNet5Params* params,
                     &outputs->pool1_, &params->pool1_);
 
   ReLUBackward(outputs->pool1_.dx_, outputs->conv1_.y_, &outputs->relu1_);
-  Conv2dBackward(outputs->relu1_.dx_, outputs->pool0_.y_, &outputs->conv1_,
-                 &grad_params->conv1_, &params->conv1_);
+  Conv2dBackward(outputs->relu1_.dx_, outputs->pool0_.y_,
+                 &outputs->conv1_, &params->conv1_);
 
   MaxPool2dBackward(outputs->conv1_.dx_, outputs->relu0_.y_,
                     &outputs->pool0_, &params->pool0_);
 
   ReLUBackward(outputs->pool0_.dx_, outputs->conv0_.y_, &outputs->relu0_);
-  Conv2dBackward(outputs->relu0_.dx_, x, &outputs->conv0_,
-                 &grad_params->conv0_, &params->conv0_);
+  Conv2dBackward(outputs->relu0_.dx_, x,
+                 &outputs->conv0_, &params->conv0_);
 }
 
 void LeNet5UpdateParams(Optimizer* optimizer,
@@ -317,7 +315,6 @@ void TrainEpoch(const int epoch,
                 IntTensor* target,
                 IntTensor* estimated,
                 LeNet5Params* model_params,
-                LeNet5Params* grad_params,
                 LayerOutputs* layer_outputs,
                 OptimizerSGD* optimizer,
                 TensorListEntry* optim_params,
@@ -376,7 +373,7 @@ void TrainEpoch(const int epoch,
     LeNet5Forward(x, target, model_params, layer_outputs);
 
     // Perform the backward operation
-    LeNet5Backward(model_params, x, target, layer_outputs, grad_params);
+    LeNet5Backward(x, target, model_params, layer_outputs);
 
     // Update the parameters
     LeNet5UpdateParams((Optimizer*)optimizer, optim_params, optim_gradients);
@@ -506,10 +503,8 @@ int main(int argc, char** argv)
 
   // Initialize a model
   LeNet5Params model_params;
-  LeNet5Params grad_params;
   LayerOutputs layer_outputs;
   LeNet5ParamsInitialize(&model_params);
-  LeNet5ParamsInitialize(&grad_params);
   LayerOutputsInitialize(&layer_outputs);
 
   // Initialize a SGD optimizer
@@ -519,8 +514,7 @@ int main(int argc, char** argv)
   // Create a list of parameters and gradients for the optimizer
   TensorListEntry optim_params;
   TensorListEntry optim_gradients;
-  OptimizerInitialize(&optim_params, &optim_gradients,
-                      &model_params, &grad_params);
+  OptimizerInitialize(&optim_params, &optim_gradients, &model_params);
 
   // Start the training
   const int num_epochs = 20;
@@ -539,7 +533,7 @@ int main(int argc, char** argv)
 
     // Perform the training
     TrainEpoch(epoch, batch_size, x, target, estimated,
-               &model_params, &grad_params, &layer_outputs,
+               &model_params, &layer_outputs,
                optimizer, &optim_params, &optim_gradients,
                train_samples_perm, train_images, train_labels);
 
@@ -560,7 +554,6 @@ int main(int argc, char** argv)
 
   // Free the model
   LeNet5ParamsDestroy(&model_params);
-  LeNet5ParamsDestroy(&grad_params);
   LayerOutputsDestroy(&layer_outputs);
 
   // Free the dataset
