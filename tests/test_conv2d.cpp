@@ -19,10 +19,7 @@ static void Conv2dForwardAndBackward(const int batch_size,
 {
   Conv2dParams params;
   Conv2dParamsInitialize(&params, in_channels, out_channels,
-                         kernel_size, kernel_size, stride, padding);
-  Conv2dParams dparams;
-  Conv2dParamsInitialize(&dparams, in_channels, out_channels,
-                         kernel_size, kernel_size, stride, padding);
+                         kernel_size, kernel_size, stride, padding, false);
   Conv2dOutputs outputs;
   Conv2dOutputsInitialize(&outputs, false);
 
@@ -40,17 +37,16 @@ static void Conv2dForwardAndBackward(const int batch_size,
   // Backward operation
   FloatTensor* dy = (FloatTensor*)TensorEmpty4d(
     TENSOR_TYPE_FLOAT, batch_size, out_channels, out_height, out_width);
-  Conv2dBackward(dy, x, &outputs, &dparams, &params);
+  Conv2dBackward(dy, x, &outputs, &params);
 
   EXPECT_TRUE(TensorIsShapeEqual(
     (Tensor*)x, (Tensor*)outputs.dx_));
   EXPECT_TRUE(TensorIsShapeEqual(
-    (Tensor*)params.weight_, (Tensor*)dparams.weight_));
+    (Tensor*)params.weight_, (Tensor*)params.dweight_));
   EXPECT_TRUE(TensorIsShapeEqual(
-    (Tensor*)params.bias_, (Tensor*)dparams.bias_));
+    (Tensor*)params.bias_, (Tensor*)params.dbias_));
 
   Conv2dParamsFree(&params);
-  Conv2dParamsFree(&dparams);
   Conv2dOutputsFree(&outputs);
   TensorFree((Tensor**)&x);
   TensorFree((Tensor**)&dy);
